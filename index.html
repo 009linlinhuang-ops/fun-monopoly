@@ -1401,7 +1401,14 @@ function startGame(){
 /* 对方掷骰: 显示骰子动画, 并播放对方棋子行走动画 */
 function receiveDice(m){
   if(state.busy)return;
-  const p=players.find(x=>x.id===m.i)||players[state.turn];
+  // 找出掷骰玩家在当前 players 数组中的索引
+  const turnIdx = players.findIndex(p => p.id === m.i);
+  // 如果找不到该玩家，或者当前回合已经不是该玩家，说明该骰子消息已经过时，忽略
+  if (turnIdx === -1 || state.turn !== turnIdx) {
+    console.log('忽略过时的骰子消息');
+    return;
+  }
+  const p=players[turnIdx];
   if(!p)return;
   waiting=true;                       // 进入"等待对方操作"状态
   renderPlayers();updateRollBtn();
