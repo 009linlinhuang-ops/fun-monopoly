@@ -1,0 +1,1155 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>🎲 趣动大富翁 · 联网双人版</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{height:100%}
+body{
+  font-family:"Comic Sans MS","Comic Neue","Chalkboard SE","YouYuan","幼圆","Microsoft YaHei","PingFang SC",sans-serif;
+  background:linear-gradient(160deg,#8ed6ff 0%,#c9f0ff 40%,#ffe9c9 100%);
+  min-height:100vh;color:#4a3f5c;overflow-x:hidden;user-select:none;
+  padding-top:46px; /* 给顶部连接状态条留出空间 */
+}
+.deco{position:fixed;pointer-events:none;z-index:0;opacity:.55;animation:floaty 7s ease-in-out infinite;font-size:clamp(24px,4vw,44px)}
+@keyframes floaty{0%,100%{transform:translateY(0) rotate(-6deg)}50%{transform:translateY(-26px) rotate(8deg)}}
+
+.wrap{position:relative;z-index:1;padding:14px 12px 34px;display:flex;flex-direction:column;align-items:center;gap:12px}
+h1.title{
+  font-size:clamp(22px,4vw,34px);color:#fff;letter-spacing:2px;
+  text-shadow:0 3px 0 #f4839c,0 6px 0 rgba(0,0,0,.12);
+  animation:bob 2.4s ease-in-out infinite;
+}
+.sub{color:#6b5b8a;font-weight:700;font-size:13px;margin-top:2px}
+@keyframes bob{0%,100%{transform:translateY(0) scale(1)}50%{transform:translateY(-6px) scale(1.03)}}
+
+.layout{display:flex;gap:16px;justify-content:center;align-items:flex-start;flex-wrap:wrap;width:100%;max-width:1080px}
+
+/* ===== 棋盘 ===== */
+/* 【优化1】.board 作为弹窗的定位容器 (position:relative), 弹窗将 absolute 定位在其中 */
+.board{
+  position:relative;width:min(94vw,660px);aspect-ratio:1/1;flex-shrink:0;
+  background:#fff8e8;border:7px solid #fff;border-radius:26px;
+  box-shadow:0 12px 34px rgba(80,60,120,.22);
+  display:grid;grid-template-columns:repeat(8,1fr);grid-template-rows:repeat(8,1fr);
+  gap:7px;padding:9px;
+}
+.cell{
+  position:relative;border-radius:12px;border:3px solid rgba(255,255,255,.95);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;
+  box-shadow:inset 0 -5px 0 rgba(0,0,0,.09);text-align:center;overflow:hidden;
+  transition:transform .12s,box-shadow .12s;
+}
+.cell:hover{transform:scale(1.05);z-index:2}
+.cell .c-icon{font-size:clamp(13px,2.4vw,24px);line-height:1.15}
+.cell .c-name{font-weight:900;font-size:clamp(7.5px,1.4vw,11px);color:#5b4a70;line-height:1.15;max-width:96%}
+/* 【优化2】格子文字层级提到棋子之上 (z-index:3 > 棋子 z-index:2), 文字不再被棋子遮挡 */
+.cell .c-icon,.cell .c-name{position:relative;z-index:3}
+.t-start{background:linear-gradient(160deg,#ffe98a,#ffc93c)}
+.t-reward{background:linear-gradient(160deg,#ffc2d1,#ff8fab)}
+.t-act{background:linear-gradient(160deg,#b7e8ff,#6cc9f0)}
+.t-gift{background:linear-gradient(160deg,#e6d5ff,#b78ff0)}
+.t-penalty{background:linear-gradient(160deg,#ffd9b0,#ffab76)}
+.cell.flash{animation:cellflash .8s ease}
+@keyframes cellflash{0%{transform:scale(1)}35%{transform:scale(1.24)}100%{transform:scale(1)}}
+
+/* 【优化2】棋子: 缩小尺寸并降低层级, 不遮挡格子文字; pointer-events:none 不干扰点击, 跳动动画保留 */
+.piece{position:absolute;width:28px;height:28px;font-size:20px;z-index:2;display:flex;align-items:center;justify-content:center;filter:drop-shadow(0 5px 3px rgba(0,0,0,.3));transform:translate(-50%,-50%);pointer-events:none}
+.piece .pinner{animation:hop .38s ease}
+@keyframes hop{0%{transform:translateY(0) scale(1)}35%{transform:translateY(-16px) scale(1.12)}100%{transform:translateY(0) scale(1)}}
+
+.center{
+  position:absolute;left:12.5%;top:12.5%;width:75%;height:75%;z-index:1;
+  background:#fffdf4;border:6px dashed #ffd6e8;border-radius:22px;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;text-align:center;padding:10px;
+  box-shadow:inset 0 0 30px rgba(255,200,220,.5);
+}
+.center .c-title{font-size:clamp(15px,2.8vw,24px);font-weight:900;color:#f06b8f;letter-spacing:1px}
+.center .c-turn{font-size:clamp(12px,2vw,17px);font-weight:800;color:#5b4a70;background:#ffe9f0;border-radius:99px;padding:5px 14px;animation:bob 1.6s infinite}
+.center .c-msg{font-size:clamp(10px,1.6vw,13px);color:#8a7aa8;max-width:92%;min-height:18px}
+.center .c-hearts{font-size:clamp(14px,2.2vw,20px);letter-spacing:6px}
+
+/* ===== 侧边栏 ===== */
+.panel{width:min(94vw,330px);display:flex;flex-direction:column;gap:11px}
+.pcard{background:#fff;border-radius:18px;border:4px solid;padding:9px 12px;display:flex;align-items:center;gap:10px;box-shadow:0 5px 0 rgba(0,0,0,.07);transition:all .2s}
+.pcard .pico{font-size:30px}
+.pcard .pname{font-weight:900;font-size:16px;color:#4a3f5c}
+.pcard .pstats{font-size:12px;color:#6b5b8a;font-weight:700;line-height:1.55}
+.pcard.p1{border-color:#ffc74f}
+.pcard.p2{border-color:#ff8fb2}
+.pcard.active{transform:scale(1.03);box-shadow:0 7px 0 rgba(0,0,0,.09),0 0 0 4px rgba(255,180,200,.55)}
+.pcard.active::after{content:"▶ 轮到TA";margin-left:auto;font-size:11px;font-weight:800;color:#e0557a;animation:bob .8s infinite;white-space:nowrap}
+.you{font-size:10px;color:#e0557a;font-weight:900;border:1.5px solid #ffb9ce;border-radius:99px;padding:0 5px;margin-left:3px}
+
+.dicecard{background:#fff;border-radius:18px;border:4px solid #ffe3b0;padding:12px;display:flex;flex-direction:column;align-items:center;gap:10px;box-shadow:0 5px 0 rgba(0,0,0,.07)}
+.dicecard .dlabel{font-weight:900;color:#e0557a;font-size:14px}
+.die{
+  width:86px;height:86px;border-radius:20px;background:linear-gradient(160deg,#fff,#ffe9f3);border:5px solid #f4839c;
+  display:flex;align-items:center;justify-content:center;font-size:42px;font-weight:900;color:#e0557a;
+  box-shadow:inset 0 -6px 0 rgba(240,100,140,.25),0 6px 14px rgba(0,0,0,.12);
+  animation:diepulse 2.2s ease-in-out infinite;
+}
+@keyframes diepulse{0%,100%{transform:scale(1)}50%{transform:scale(1.05)}}
+.die.rolling{animation:wig .15s infinite}
+@keyframes wig{0%{transform:rotate(-12deg) scale(1.05)}50%{transform:rotate(12deg) scale(.96)}100%{transform:rotate(-12deg) scale(1.05)}}
+.btns{display:flex;gap:8px;flex-wrap:wrap;justify-content:center}
+.btn{
+  font-family:inherit;border:none;border-radius:14px;font-weight:900;font-size:15px;padding:10px 18px;cursor:pointer;color:#fff;
+  box-shadow:0 5px 0 rgba(0,0,0,.18);transition:all .1s;background:#7ec8e3;
+}
+.btn:hover{filter:brightness(1.07)}
+.btn:active{transform:translateY(4px);box-shadow:0 1px 0 rgba(0,0,0,.18)}
+.btn:disabled{filter:grayscale(.6);cursor:not-allowed;opacity:.7}
+.btn.primary{background:linear-gradient(160deg,#ff9d5c,#ff6b6b)}
+.btn.green{background:linear-gradient(160deg,#7ad0a0,#3fae7a)}
+.btn.pink{background:linear-gradient(160deg,#ff9ab8,#f06b8f)}
+.btn.gold{background:linear-gradient(160deg,#ffd93d,#f5a623);color:#7a4e00}
+.btn.gray{background:linear-gradient(160deg,#c9c3e0,#9d93c0)}
+.btn.small{font-size:12px;padding:7px 12px;border-radius:11px}
+.btn.big{font-size:16px;padding:13px 20px}
+/* 【优化3】音乐关闭时的按钮样式 */
+.btn.music-off{filter:grayscale(.85);opacity:.65}
+
+.logcard{background:#fff;border-radius:18px;border:4px solid #c9e8ff;padding:10px 12px;box-shadow:0 5px 0 rgba(0,0,0,.07)}
+.logcard h3{font-size:13px;color:#4a90c4;margin-bottom:6px}
+#log{max-height:150px;overflow-y:auto;font-size:12px;font-weight:700;color:#6b5b8a;display:flex;flex-direction:column;gap:4px}
+#log .li{background:#f4f8ff;border-radius:8px;padding:4px 8px;animation:slidein .3s}
+@keyframes slidein{from{transform:translateY(-8px);opacity:0}to{transform:none;opacity:1}}
+
+/* ===== 弹窗 / 提示 ===== */
+/* 【优化1】弹窗遮罩: fixed → absolute, 只覆盖棋盘区域, 不再遮挡侧边栏/按钮 */
+.overlay{position:absolute;inset:0;background:rgba(70,50,110,.5);backdrop-filter:blur(3px);display:flex;padding:12px;overflow-y:auto;z-index:30;border-radius:19px}
+.modal{position:relative;width:min(90%,400px);margin:auto;background:#fff;border-radius:24px;border:6px solid #ffc2d1;padding:18px;text-align:center;box-shadow:0 16px 50px rgba(0,0,0,.3);animation:pop .25s ease;max-height:100%;overflow-y:auto}
+.modal.gold{border-color:#ffd93d}.modal.blue{border-color:#7ec8e3}.modal.red{border-color:#ff9d8a}.modal.green{border-color:#7fe0b4}.modal.gray{border-color:#c9c3e0}
+@keyframes pop{from{transform:scale(.7);opacity:0}to{transform:scale(1);opacity:1}}
+.modal .m-icon{font-size:52px;margin-bottom:4px}
+.modal h2{font-size:20px;color:#5b4a70;margin-bottom:6px}
+.modal .m-desc{font-size:14px;color:#7d6b9e;font-weight:700;line-height:1.7;margin-bottom:14px;white-space:pre-line}
+.modal .m-btns{display:flex;flex-direction:column;gap:9px;margin-top:6px}
+.modal .x{position:absolute;top:10px;right:14px;font-size:20px;color:#b9aecf;background:none;border:none;cursor:pointer;font-weight:900}
+.m-row{display:flex;justify-content:space-between;align-items:center;padding:7px 4px;border-bottom:2px dashed #f0eaf8;font-size:14px;font-weight:800;color:#5b4a70}
+.m-row .v{color:#e0557a}
+.rules{font-size:12.5px;color:#8a7aa8;font-weight:700;line-height:1.9;text-align:left;background:#fdf6ff;border-radius:12px;padding:10px 14px}
+input.name{font-family:inherit;font-size:16px;font-weight:800;border:3px solid #ffd6e8;border-radius:12px;padding:9px 12px;text-align:center;width:100%;color:#5b4a70;outline:none;user-select:text}
+input.name:focus{border-color:#f4839c}
+
+#toast{position:fixed;top:18px;left:50%;transform:translateX(-50%) translateY(-90px);z-index:80;background:#5b4a70;color:#fff;font-weight:800;font-size:14px;padding:10px 20px;border-radius:99px;box-shadow:0 8px 20px rgba(0,0,0,.25);transition:transform .3s;pointer-events:none;max-width:92vw;text-align:center}
+#toast.show{transform:translateX(-50%) translateY(0)}
+#toast.ok{background:#3fae7a}
+#toast.bad{background:#e0557a}
+.confetti{position:fixed;top:-20px;z-index:90;width:10px;height:16px;border-radius:3px;animation:fall linear forwards;pointer-events:none}
+@keyframes fall{to{transform:translateY(108vh) rotate(660deg);opacity:.4}}
+@media (max-width:720px){.die{width:70px;height:70px;font-size:34px}}
+
+/* ===== 【联网】顶部连接状态条 ===== */
+#connbar{
+  position:fixed;top:10px;left:50%;transform:translateX(-50%);z-index:45;
+  display:flex;align-items:center;gap:8px;background:#fff;border:3px solid #ffd6e8;border-radius:99px;
+  padding:5px 14px;box-shadow:0 5px 14px rgba(80,60,120,.18);
+  font-size:12px;font-weight:800;color:#5b4a70;white-space:nowrap;max-width:94vw;
+  overflow:hidden;text-overflow:ellipsis;
+}
+#connbar #connstatus{flex-shrink:0}
+#connbar #connstatus.cs-ok{color:#3fae7a}
+#connbar #connroom{overflow:hidden;text-overflow:ellipsis}
+#connbar .btn.small{padding:3px 10px;font-size:11px;flex-shrink:0}
+
+/* ===== 【联网】大厅 (创建/加入房间) ===== */
+#lobby{
+  position:fixed;inset:0;z-index:40;
+  background:linear-gradient(160deg,#8ed6ff 0%,#c9f0ff 45%,#ffe9c9 100%);
+  display:flex;align-items:center;justify-content:center;padding:16px;overflow-y:auto;
+}
+.lcard{
+  background:#fff;border-radius:26px;border:6px solid #ffc2d1;padding:22px;
+  width:min(92vw,380px);text-align:center;box-shadow:0 16px 50px rgba(70,50,110,.3);animation:pop .25s ease;
+}
+.l-logo{font-size:54px;animation:bob 2.4s infinite}
+.lcard h2{font-size:21px;color:#5b4a70;margin:6px 0 2px}
+.l-sub{font-size:12.5px;color:#8a7aa8;font-weight:700;margin-bottom:14px}
+.lname{margin:10px 0 14px}
+.lname label{font-size:12px;font-weight:800;color:#8a7aa8;display:block;margin-bottom:5px}
+.lv{display:flex;flex-direction:column;gap:10px}
+.lv label{font-size:12px;font-weight:800;color:#8a7aa8}
+.l-code{
+  font-size:38px;font-weight:900;letter-spacing:8px;color:#e0557a;background:#fff5f8;
+  border:3px dashed #ffb9ce;border-radius:16px;padding:10px 6px;margin:6px 0 10px;
+  font-family:Consolas,monospace;
+}
+.l-wait{font-size:13px;font-weight:800;color:#8a7aa8;margin-bottom:8px;line-height:1.7}
+.l-wait small{font-size:11px;color:#b9aecf}
+</style>
+</head>
+<body>
+
+<div class="deco" style="left:3%;top:10%;animation-delay:.2s">🌈</div>
+<div class="deco" style="right:5%;top:16%;animation-delay:1s">🎈</div>
+<div class="deco" style="left:8%;bottom:12%;animation-delay:2s">🍓</div>
+<div class="deco" style="right:7%;bottom:8%;animation-delay:1.4s">🦄</div>
+<div class="deco" style="left:16%;top:55%;animation-delay:.6s;opacity:.35">⭐</div>
+<div class="deco" style="right:16%;top:48%;animation-delay:2.6s;opacity:.35">💫</div>
+
+<!-- 【联网】顶部连接状态条 -->
+<div id="connbar">
+  <span id="connstatus">⏳ 未连接</span>
+  <span id="connroom"></span>
+  <button class="btn small gray" id="exitbtn" onclick="exitToLobby()" style="display:none">🚪 退出</button>
+</div>
+
+<div class="wrap">
+  <div style="text-align:center">
+    <h1 class="title">🎲 趣动大富翁 🎲</h1>
+    <div class="sub">好友同乐 · 联网双人 · 掷骰子 · 惩罚要真做哦 😜</div>
+  </div>
+
+  <div class="layout">
+    <div class="board" id="board"></div>
+
+    <div class="panel">
+      <div class="pcard p1" id="pcard1">
+        <div class="pico">🐻</div>
+        <div><div class="pname">熊宝</div><div class="pstats">💰现金 <b>5元</b> · 🎫代金券 <b>20万</b></div></div>
+      </div>
+      <div class="pcard p2" id="pcard2">
+        <div class="pico">🐰</div>
+        <div><div class="pname">兔宝</div><div class="pstats">💰现金 <b>5元</b> · 🎫代金券 <b>20万</b></div></div>
+      </div>
+
+      <div class="dicecard">
+        <div class="dlabel">🎲 步数滚动机</div>
+        <div class="die" id="die">?</div>
+        <button class="btn primary" id="roll" disabled onclick="doRoll()">🎲 掷骰子!</button>
+        <div class="btns">
+          <button class="btn small pink" onclick="openBackpack()">🎒 背包</button>
+          <button class="btn small gold" onclick="openStats()">🏆 结算</button>
+          <button class="btn small gray" onclick="openHelp()">📖 玩法</button>
+          <button class="btn small gray" id="mutebtn" onclick="toggleMute()">🔊</button>
+          <!-- 【优化3】背景音乐开关按钮 -->
+          <button class="btn small gray" id="musicbtn" onclick="toggleMusic()" title="背景音乐开关">🎵</button>
+        </div>
+      </div>
+
+      <div class="logcard"><h3>📜 游戏记录</h3><div id="log"></div></div>
+    </div>
+  </div>
+</div>
+
+<!-- 【联网】大厅: 创建 / 加入房间 -->
+<div id="lobby">
+  <div class="lcard">
+    <div class="l-logo">🎲</div>
+    <h2>趣动大富翁 · 联网双人版</h2>
+    <div class="l-sub">和好友在不同的设备上通过网络一起玩!</div>
+    <div class="lname">
+      <label>你的昵称 (可留空使用默认)</label>
+      <input class="name" id="myname" maxlength="6" placeholder="熊宝 / 兔宝" autocomplete="off">
+    </div>
+
+    <div class="lv" id="lv-menu">
+      <button class="btn primary big" onclick="createRoom()">🏠 创建房间</button>
+      <button class="btn pink big" onclick="showJoinView()">🔑 加入房间</button>
+    </div>
+
+    <div class="lv" id="lv-host" style="display:none">
+      <div style="font-size:12px;font-weight:800;color:#8a7aa8">房间号 (发给对方)</div>
+      <div class="l-code" id="roomcode">------</div>
+      <div class="l-wait" id="hostwait">📡 等待对方加入...<br><small>对方选择「加入房间」并输入上面的房间号即可</small></div>
+      <button class="btn gray" onclick="backToMenu()">✖ 取消</button>
+    </div>
+
+    <div class="lv" id="lv-join" style="display:none">
+      <label>输入对方的 6 位房间号</label>
+      <input class="name" id="joincode" maxlength="6" inputmode="numeric" placeholder="123456" autocomplete="off">
+      <button class="btn primary big" onclick="doJoin()">📡 连接</button>
+      <button class="btn gray" onclick="backToMenu()">✖ 返回</button>
+    </div>
+  </div>
+</div>
+
+<!-- 【优化3】背景音乐: 循环播放, 免版权在线曲目; 浏览器会阻止自动播放, 首次点击页面时由 JS 启动 -->
+<audio id="bgm" loop preload="auto" src="https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3"></audio>
+
+<div id="toast"></div>
+
+<!-- 【联网】PeerJS 库 (CDN, 加载失败时自动切换到备用 CDN) -->
+<script>window.peerFallback=function(){var s=document.createElement('script');s.src='https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js';document.head.appendChild(s)};</script>
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js" onerror="peerFallback()"></script>
+
+<script>
+/*
+ * ================================================================
+ *  🎲 趣动大富翁 · 联网双人版  (基于原单机版改造)
+ * ================================================================
+ *  【联网架构说明】
+ *  - 通信: PeerJS (WebRTC 数据通道) 通过官方公共云服务器建立 P2P 连接,
+ *    无需自建服务器。房间号 = Peer ID 的一部分。
+ *  - 角色: 创建房间 = 主机 (玩家1 🐻, 先手) / 加入房间 = 玩家2 (🐰)
+ *  - 同步策略: 棋盘、格子内容、玩家初始数据由双方本地各自维护;
+ *    游戏状态(回合、位置、现金、代金券、背包)采用"全量状态快照"
+ *    广播同步: 任何一方完成一次操作后, 立即把完整状态发给对方,
+ *    对方直接整体替换本地数据并重绘 → 保证最终一致性。
+ *  - 弹窗(活动选择/惩罚)只在本机弹出, 结果随快照同步给对方;
+ *    对方界面显示"等待对方操作..."并禁用掷骰按钮。
+ *  - 断线重连: 主机 Peer ID 保持不变, 加入者输入原房间号即可重连,
+ *    重连后主机立即发送当前状态快照, 双方无缝恢复。
+ *  - 部署注意: WebRTC 需要 HTTPS 页面(localhost 除外),
+ *    可部署到 GitHub Pages / Netlify / Vercel 等任意静态托管。
+ *  - 消息协议 (JSON, 通过 DataConnection 发送):
+ *      {t:'hi',    name}         加入者 → 主机: 上报昵称 (首次加入 / 重连)
+ *      {t:'start', players:[..]} 主机   → 加入者: 开局, 携带双方初始数据
+ *      {t:'dice',  n}            回合玩家 → 对方: 掷骰结果, 对方同步动画
+ *      {t:'event', ev:{..}}      回合玩家 → 对方: 途中事件(如过起点领工资)
+ *      {t:'state', players, turn, ev} 任意一方 → 对方: 全量状态快照 (权威同步)
+ *      {t:'restart'}             任意一方 → 对方: 再来一局
+ *  ================================================================
+ *  【优化版新增】
+ *  1. 弹窗嵌入棋盘: 遮罩由 fixed 改为 absolute 挂载在 .board 内,
+ *     只覆盖棋盘区域, 侧边栏(玩家卡片/骰子/日志)始终可见可操作
+ *  2. 棋子不遮挡格子文字: 棋子缩小为 28px 且 z-index 降至 2,
+ *     格子文字 z-index 3 浮于棋子之上 (pointer-events:none 不干扰点击)
+ *  3. 背景音乐: <audio> 循环播放免版权曲目(SoundHelix, 带备用源),
+ *     默认开启, 首次点击页面自动播放, 🎵 按钮可开关, 状态持久化
+ * ================================================================
+ */
+
+/* ================== 数据 ================== */
+const CELLS=[
+ {t:'start',  icon:'🏁', name:'起点',        desc:'到达或经过: 领 5000 代金券工资'},
+ {t:'reward', icon:'🤗', name:'拥抱券',      desc:'下次见面可以获得一个拥抱', reward:{icon:'🤗',name:'拥抱券',desc:'下次见面可以获得一个拥抱'}},
+ {t:'act',    icon:'⛰️', name:'一起夜爬',    desc:'花 2万 代金券, 或消耗 1 个奖励', cost:20000},
+ {t:'gift',   icon:'🎀', name:'礼物券50',    desc:'买一件 50 元以内的礼物送给对方', reward:{gift:true,icon:'🎀',name:'礼物券(50元)',desc:'给对方买一件 50 元以内的礼物!'}},
+ {t:'penalty',icon:'💪', name:'俯卧撑5个',   desc:'立刻做 5 个俯卧撑', action:'立刻做 5 个俯卧撑! 做完才算数哦 💦'},
+ {t:'act',    icon:'🎤', name:'一起去KTV',   desc:'花 1万 代金券, 或消耗 1 个奖励', cost:10000},
+ {t:'reward', icon:'🎵', name:'唱歌券',      desc:'为对方唱一首歌', reward:{icon:'🎵',name:'唱歌券',desc:'为对方唱一首歌, 挑TA最喜欢的! 🎶'}},
+ {t:'gift',   icon:'🎀', name:'礼物券100',   desc:'买一件 100 元以内的礼物送给对方', reward:{gift:true,icon:'🎀',name:'礼物券(100元)',desc:'给对方买一件 100 元以内的礼物!'}},
+ {t:'act',    icon:'🏹', name:'一起射箭',    desc:'花 1.5万 代金券, 或消耗 1 个奖励', cost:15000},
+ {t:'gift',   icon:'🎀', name:'礼物券200',   desc:'买一件 100-200 元的礼物送给对方', reward:{gift:true,icon:'🎀',name:'礼物券(100-200元)',desc:'给对方买一件 100-200 元的礼物!'}},
+ {t:'reward', icon:'🤝', name:'牵手券',      desc:'获得牵手5分钟', reward:{icon:'🤝',name:'牵手券',desc:'牵手 5 分钟, 谁先松手谁洗碗!'}},
+ {t:'act',    icon:'🍸', name:'一起调酒',    desc:'花 2万 代金券, 或消耗 1 个奖励', cost:20000},
+ {t:'penalty',icon:'🤳', name:'做鬼脸拍照',  desc:'做个鬼脸并拍照', action:'做个最丑的鬼脸, 拍照发给对方! 📸'},
+ {t:'act',    icon:'🎱', name:'一起打台球',  desc:'花 1.5万 代金券, 或消耗 1 个奖励', cost:15000},
+ {t:'gift',   icon:'🎀', name:'礼物券500',   desc:'买一件 200-500 元的礼物送给对方', reward:{gift:true,icon:'🎀',name:'礼物券(200-500元)',desc:'给对方买一件 200-500 元的礼物!'}},
+ {t:'penalty',icon:'💸', name:'罚款2元',     desc:'从现金里扣 2 元', fine:2},
+ {t:'reward', icon:'😘', name:'摸脸券',      desc:'可以摸一下脸', reward:{icon:'😘',name:'摸脸券',desc:'获得摸一下脸的权利, 摸到脸红为止 😄'}},
+ {t:'act',    icon:'🧶', name:'一起做手工',  desc:'花 1万 代金券, 或消耗 1 个奖励', cost:10000},
+ {t:'gift',   icon:'🎀', name:'礼物券50',    desc:'买一件 50 元以内的礼物送给对方', reward:{gift:true,icon:'🎀',name:'礼物券(50元)',desc:'给对方买一件 50 元以内的礼物!'}},
+ {t:'act',    icon:'🎮', name:'一起玩游戏',  desc:'花 1万 代金券, 或消耗 1 个奖励', cost:10000},
+ {t:'penalty',icon:'🙊', name:'说丑事',      desc:'说自己的一件丑事', action:'说一件自己最丢人的丑事, 必须诚实! 🙈'},
+ {t:'reward', icon:'💰', name:'1块钱',       desc:'现金 +1 元', cash:1},
+ {t:'act',    icon:'🍳', name:'一起做饭',    desc:'花 1.5万 代金券, 或消耗 1 个奖励', cost:15000},
+ {t:'act',    icon:'🎬', name:'一起看电影',  desc:'花 2万 代金券, 或消耗 1 个奖励', cost:20000},
+ {t:'penalty',icon:'💸', name:'罚款0.5元',   desc:'从现金里扣 0.5 元', fine:0.5},
+ {t:'act',    icon:'🎇', name:'一起逛夜市',  desc:'花 1万 代金券, 或消耗 1 个奖励', cost:10000},
+ {t:'reward', icon:'💰', name:'1块钱',       desc:'现金 +1 元', cash:1},
+ {t:'act',    icon:'🧩', name:'一起拼乐高',  desc:'花 1万 代金券, 或消耗 1 个奖励', cost:10000}
+];
+
+const state={turn:0,busy:false,muted:false,started:false,turnLock:false};
+let players=[];
+const rollHistory=[];
+
+/* ================== 【联网】连接状态 ================== */
+const PEER_PREFIX='qdmfh-';          // 房间号前缀, 避免与其他 PeerJS 用户冲突
+let peer=null;                        // PeerJS 实例
+let conn=null;                        // 数据连接
+let myIdx=0;                          // 本机玩家索引: 0=主机(🐻) 1=加入者(🐰)
+let hostName='熊宝',guestName='兔宝'; // 双方昵称 (主机在创建时记录, 加入者通过 hi 消息上报)
+let connected=false;                  // P2P 数据连接是否已建立
+let waiting=false;                    // 正在等待对方操作 (对方回合中)
+let hosting=false,joining=false;      // 大厅状态
+let pendingStates=[];                 // 本机回合中暂存的对方状态快照 (回合结束后按序应用)
+let pendingRestart=false;             // 本机回合中收到的"再来一局"请求
+let lastEv=null;                      // 本次操作产生的事件 (日志/提示/音效), 随快照发给对方
+let discModal=false;                  // 断线弹窗去重
+let lastOverlay=null;                 // 最近一次弹窗 (断线重连时自动关闭)
+
+/* 【联网】发送消息 (连接未建立时静默丢弃) */
+function send(obj){
+  try{if(conn&&conn.open)conn.send(obj);}catch(e){}
+}
+
+/* 【联网】生成双方玩家的初始数据 */
+function makePlayers(n0,n1){
+  return [
+    {id:1,name:n0,piece:'🐻',cash:5,voucher:200000,pos:0,props:[],rewards:[],el:null},
+    {id:2,name:n1,piece:'🐰',cash:5,voucher:200000,pos:0,props:[],rewards:[],el:null}
+  ];
+}
+
+/* 【联网】当前完整状态的序列化快照 (去掉 DOM 引用) */
+function snapPlayers(){
+  return players.map(p=>({
+    id:p.id,name:p.name,piece:p.piece,cash:p.cash,voucher:p.voucher,pos:p.pos,
+    props:p.props?p.props.slice():[],
+    rewards:p.rewards.map(r=>({icon:r.icon,name:r.name,desc:r.desc,gift:r.gift,used:r.used}))
+  }));
+}
+
+/* 【联网】广播全量状态快照 (任何一次数据变更后调用) */
+function sendState(ev){
+  send({t:'state',players:snapPlayers(),turn:state.turn,ev:ev||null});
+}
+
+/* 【联网】应用对方广播的事件 (日志/提示/音效/彩带) */
+function applyEv(ev){
+  if(!ev)return;
+  if(ev.log)log(ev.log);
+  if(ev.toast)toast(ev.toast[0],ev.toast[1]);
+  if(ev.sfx&&sfx[ev.sfx])sfx[ev.sfx]();
+  if(ev.confetti)confetti();
+}
+
+/* ================== 工具 ================== */
+const $=s=>document.querySelector(s);
+const fmtV=v=>v>=10000?(v/10000)+'万':String(v);
+const fmtCash=v=>(Math.round(v*100)/100).toLocaleString('zh-CN',{maximumFractionDigits:1});
+const POS=idx=>{
+  if(idx<=7)return[1,idx+1];          // 上排 0-7
+  if(idx<=14)return[idx-6,8];         // 右列 8-14
+  if(idx<=21)return[8,22-idx];        // 下排 15-21
+  return[29-idx,1];                   // 左列 22-27
+};
+
+function log(msg){
+  const l=$('#log'),d=document.createElement('div');
+  d.className='li';d.innerHTML=msg;
+  l.prepend(d);while(l.children.length>9)l.lastChild.remove();
+}
+let toastTimer;
+function toast(msg,cls){
+  const t=$('#toast');t.textContent=msg;t.className=cls?'show '+cls:'show';
+  clearTimeout(toastTimer);toastTimer=setTimeout(()=>t.classList.remove('show'),2200);
+}
+function confetti(){
+  const colors=['#ff9ab8','#ffd93d','#7fe0b4','#7ec8e3','#c9a7ff','#ff9d5c'];
+  for(let i=0;i<40;i++){
+    const d=document.createElement('div');d.className='confetti';
+    d.style.left=Math.random()*100+'vw';
+    d.style.background=colors[Math.floor(Math.random()*colors.length)];
+    d.style.animationDuration=(1.2+Math.random()*1.2)+'s';
+    d.style.animationDelay=(Math.random()*0.4)+'s';
+    document.body.appendChild(d);
+    setTimeout(()=>d.remove(),3000);
+  }
+}
+
+/* ================== 音效 ================== */
+let AC=null;
+function beep(f,d,type,v,delay){
+  if(state.muted)return;
+  try{
+    AC=AC||new(window.AudioContext||window.webkitAudioContext)();
+    const o=AC.createOscillator(),g=AC.createGain();
+    o.type=type||'sine';o.frequency.value=f;g.gain.value=v||.13;
+    o.connect(g);g.connect(AC.destination);
+    const t0=AC.currentTime+(delay||0);
+    o.start(t0);g.gain.setValueAtTime(v||.13,t0);
+    g.gain.exponentialRampToValueAtTime(.001,t0+d);
+    o.stop(t0+d+.03);
+  }catch(e){}
+}
+const sfx={
+  tick :()=>beep(520,.07,'triangle',.07),
+  dice :()=>{for(let i=0;i<4;i++)beep(300+Math.random()*250,.05,'square',.06,i*.08);},
+  coin :()=>{beep(880,.1,'sine',.13);beep(1318,.18,'sine',.13,.09);},
+  jingle:()=>{[523,659,784,1046].forEach((f,i)=>beep(f,.16,'sine',.12,i*.1));},
+  buzz :()=>{beep(240,.3,'square',.08);beep(160,.35,'square',.08,.18);},
+  buy  :()=>{beep(660,.1,'triangle',.13);beep(880,.16,'triangle',.13,.1);},
+  win  :()=>{[523,659,784,1046,784,1046].forEach((f,i)=>beep(f,.2,'triangle',.13,i*.13));}
+};
+function toggleMute(){state.muted=!state.muted;$('#mutebtn').textContent=state.muted?'🔇':'🔊';}
+
+/* ================== 【优化3】背景音乐 ================== */
+const bgm=$('#bgm');
+const BGM_MAIN='https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3';
+const BGM_BACK='https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3';
+let musicOn=true;                                 // 默认开启音乐
+try{musicOn=localStorage.getItem('qxbgm')!=='0';}catch(e){}   // 记住上次开关状态
+bgm.volume=.3;bgm.loop=true;
+function syncMusicUI(){
+  const b=$('#musicbtn');
+  b.textContent=musicOn?'🎵':'🔕';
+  b.classList.toggle('music-off',!musicOn);
+}
+function toggleMusic(){                           // 音乐开关 (状态持久化到 localStorage)
+  musicOn=!musicOn;
+  try{localStorage.setItem('qxbgm',musicOn?'1':'0');}catch(e){}
+  if(musicOn)bgm.play().catch(()=>{});
+  else bgm.pause();
+  syncMusicUI();
+}
+function tryPlayMusic(){                          // 用户首次点击/触摸页面时启动播放 (绕过自动播放限制)
+  if(musicOn&&bgm.paused)bgm.play().catch(()=>{});
+}
+bgm.addEventListener('error',()=>{                // 主音频链接失效时自动切换备用源
+  const s=parseInt(bgm.dataset.src||'0',10);
+  if(s===0){bgm.dataset.src='1';bgm.src=BGM_BACK;if(musicOn)bgm.play().catch(()=>{});}
+  else if(bgm.dataset.failed!=='1'){bgm.dataset.failed='1';toast('背景音乐加载失败, 可点击 🎵 重试','bad');}
+});
+document.addEventListener('pointerdown',tryPlayMusic,{once:true});
+document.addEventListener('touchstart',tryPlayMusic,{once:true});
+syncMusicUI();
+
+/* ================== 弹窗 ================== */
+function showModal({icon,title,desc,html,border,btns,after}){
+  return new Promise(res=>{
+    const ov=document.createElement('div');ov.className='overlay';
+    lastOverlay=ov;                       // 记录最近弹窗, 断线重连时自动关闭
+    const m=document.createElement('div');
+    m.className='modal'+(border?' '+border:'');
+    m.innerHTML=`<div class="m-icon">${icon||''}</div><h2>${title}</h2>`
+      +(desc?`<div class="m-desc">${desc}</div>`:'')+(html||'')+`<div class="m-btns"></div>`;
+    const bw=m.querySelector('.m-btns');
+    btns.forEach(b=>{
+      const btn=document.createElement('button');
+      btn.className='btn '+(b.cls||'');
+      btn.textContent=b.label;
+      if(b.disabled)btn.disabled=true;
+      btn.onclick=()=>{ov.remove();res(b.value);};
+      bw.appendChild(btn);
+    });
+    ov.appendChild(m);
+    /* 【优化1】弹窗挂载到棋盘容器内, 遮罩只覆盖棋盘区域, 侧边栏保持可操作 */
+    (document.getElementById('board')||document.body).appendChild(ov);
+    if(after)after(m);
+  });
+}
+function closeLastOverlay(){if(lastOverlay){lastOverlay.remove();lastOverlay=null;}}
+
+/* ================== 棋盘渲染 ================== */
+function buildBoard(){
+  const b=$('#board');
+  CELLS.forEach((c,i)=>{
+    const d=document.createElement('div');
+    d.className='cell t-'+c.t;d.dataset.i=i;
+    const [r,col]=POS(i);
+    d.style.gridRow=r;d.style.gridColumn=col;
+    d.innerHTML=`<div class="c-icon">${c.icon}</div><div class="c-name">${c.name}</div>`;
+    b.appendChild(d);
+  });
+  const cen=document.createElement('div');cen.className='center';
+  cen.innerHTML=`<div class="c-title">🎲 趣动大富翁</div>
+    <div class="c-turn" id="c-turn">🐻 的回合</div>
+    <div class="c-msg" id="c-msg">等待对方加入...</div>
+    <div class="c-hearts">🎈 ✨ 🎈</div>`;
+  b.appendChild(cen);
+}
+function addPieces(){
+  players.forEach(p=>{
+    const d=document.createElement('div');d.className='piece';
+    const s=document.createElement('span');s.className='pinner';s.textContent=p.piece;
+    d.appendChild(s);$('#board').appendChild(d);p.el=d;
+  });
+  placePieces();
+}
+function placePieces(){
+  players.forEach((p,idx)=>{
+    const [r,col]=POS(p.pos);
+    const x=(col-.5)/8*100,y=(r-.5)/8*100;
+    const off=idx===0?7:-7;
+    p.el.style.left=`calc(${x}% + ${off}px)`;
+    p.el.style.top=`calc(${y}% + ${-off}px)`;
+  });
+}
+function hop(p){
+  const s=p.el.querySelector('.pinner');
+  s.classList.remove('pinner');void s.offsetWidth;s.classList.add('pinner');
+}
+function renderPlayers(){
+  players.forEach((p,i)=>{
+    const el=$('#pcard'+(i+1));
+    el.querySelector('.pico').textContent=p.piece;
+    el.querySelector('.pname').innerHTML=p.name+(i===myIdx?' <span class="you">你</span>':'');
+    el.querySelector('.pstats').innerHTML=
+      `💰现金 <b>${fmtCash(p.cash)}元</b> &nbsp;🎫代金券 <b>${fmtV(p.voucher)}</b><br>`+
+      `🎁奖励 <b>${p.rewards.filter(r=>!r.used&&!r.gift).length}张</b> &nbsp;🎀礼物券 <b>${p.rewards.filter(r=>!r.used&&r.gift).length}张</b>`;
+    el.classList.toggle('active',state.turn===i&&state.started);
+  });
+  const p=players[state.turn];
+  if(!p)return;
+  $('#c-turn').innerHTML=`${p.piece} ${p.name} 的回合`;
+  if(!state.started)$('#c-msg').textContent='等待对方加入...';
+  else if(waiting)$('#c-msg').textContent=`⏳ 等待 ${players[1-state.turn].name} 操作...`;
+  else if(state.turn===myIdx)$('#c-msg').textContent=`轮到 ${p.piece} ${p.name} 掷骰子!`;
+  else $('#c-msg').textContent=`⏳ 等待对方 (${p.piece} ${p.name}) 掷骰子...`;
+}
+
+/* ================== 游戏流程 ================== */
+function initGame(n0,n1){
+  players=makePlayers(n0,n1);
+  rollHistory.length=0;
+  state.turn=0;state.busy=false;state.turnLock=false;state.started=true;
+  waiting=false;pendingStates.length=0;pendingRestart=false;lastEv=null;
+  const b=$('#board');b.innerHTML='';
+  buildBoard();addPieces();
+  renderPlayers();
+  $('#die').textContent='?';
+  $('#log').innerHTML='';
+  updateRollBtn();
+  $('#mutebtn').textContent=state.muted?'🔇':'🔊';
+  log(`🎉 ${players[0].piece} ${players[0].name} 对战 ${players[1].piece} ${players[1].name}, 开战!`);
+  sfx.jingle();
+}
+
+/* 掷骰子: 避免最近几次出现相同点数, 手感更随机 */
+function rollOnce(){
+  let n;
+  for(let i=0;i<10;i++){
+    n=1+Math.floor(Math.random()*6);
+    if(!rollHistory.includes(n))break;
+  }
+  rollHistory.push(n);
+  if(rollHistory.length>3)rollHistory.shift();
+  return n;
+}
+
+function rollDice(){
+  return new Promise(res=>{
+    const die=$('#die');
+    die.classList.add('rolling');sfx.dice();
+    const iv=setInterval(()=>{die.textContent=1+Math.floor(Math.random()*6);},70);
+    setTimeout(()=>{
+      clearInterval(iv);
+      const n=rollOnce();
+      die.textContent=n;die.classList.remove('rolling');
+      res(n);
+    },850);
+  });
+}
+
+/* 【联网】对方掷骰时, 本机播放同样的滚动动画并停在该点数 */
+function showDieRollingTo(n){
+  const die=$('#die');
+  sfx.dice();
+  die.classList.add('rolling');
+  const iv=setInterval(()=>{die.textContent=1+Math.floor(Math.random()*6);},70);
+  setTimeout(()=>{clearInterval(iv);die.textContent=n;die.classList.remove('rolling');},700);
+}
+
+/* 【联网】行走动画。
+ *  - 回合玩家 (默认模式): 真实修改位置/工资并广播途中事件;
+ *  - 观察方 (display:true): 纯展示, 跟随动画, 不结算任何逻辑,
+ *    工资等事件由对方发来的 event 消息通知。 */
+let walkTimer=null;
+function walk(p,steps,opts){
+  opts=opts||{};
+  return new Promise(res=>{
+    let i=0;
+    const go=()=>{
+      if(i>=steps){res();return;}
+      p.pos=(p.pos+1)%CELLS.length;
+      if(p.pos===0&&!opts.display){
+        p.voucher+=5000;
+        toast(`${p.piece} 经过起点, 领工资 +5000 券 🎉`,'ok');
+        sfx.coin();
+        send({t:'event',ev:{log:`${p.piece} 经过起点, 领工资 +5000 券 🎉`,toast:[`${p.piece} 经过起点, 领工资 +5000 券 🎉`,'ok'],sfx:'coin'}});
+      }
+      placePieces();hop(p);sfx.tick();renderPlayers();
+      i++;walkTimer=setTimeout(go,430);
+    };
+    go();
+  });
+}
+function stopWalk(){if(walkTimer){clearTimeout(walkTimer);walkTimer=null;}}
+
+function consumeReward(p){const r=p.rewards.find(x=>!x.used);if(r)r.used=true;}
+
+/* 【联网】落地结算: 弹窗只在当前回合玩家设备上弹出,
+ * 每个结果同时记入 lastEv, 由 doRoll 随快照同步给对方 */
+async function land(p){
+  const c=CELLS[p.pos];
+  const cell=document.querySelector(`.cell[data-i="${p.pos}"]`);
+  cell.classList.remove('flash');void cell.offsetWidth;cell.classList.add('flash');
+
+  switch(c.t){
+    case 'start':
+      log(`${p.piece} 来到起点, 工资已入账 🏁`);
+      lastEv={log:`${p.piece} 来到起点, 工资已入账 🏁`};
+      break;
+
+    case 'reward':
+      if(c.cash){
+        p.cash+=c.cash;
+        log(`${p.piece} 获得 ${c.cash} 元现金! 🪙`);
+        sfx.coin();toast(`+${c.cash} 元到手!`,'ok');
+        lastEv={log:`${p.piece} 获得 ${c.cash} 元现金! 🪙`,toast:[`+${c.cash} 元到手!`,'ok'],sfx:'coin'};
+      }else{
+        p.rewards.push(Object.assign({used:false},c.reward));
+        log(`${p.piece} 获得「${c.reward.name}」${c.reward.icon} 已放入背包`);
+        sfx.jingle();confetti();toast('获得新奖励券! 🎁','ok');
+        lastEv={log:`${p.piece} 获得「${c.reward.name}」${c.reward.icon} 已放入背包`,toast:['获得新奖励券! 🎁','ok'],sfx:'jingle',confetti:true};
+      }
+      renderPlayers();
+      break;
+
+    case 'gift':
+      p.rewards.push(Object.assign({used:false},c.reward));
+      log(`${p.piece} 获得「${c.reward.name}」${c.reward.icon} 已放入背包`);
+      sfx.jingle();confetti();toast('获得礼物券! 快去挑礼物 🎀','ok');
+      lastEv={log:`${p.piece} 获得「${c.reward.name}」${c.reward.icon} 已放入背包`,toast:['获得礼物券! 快去挑礼物 🎀','ok'],sfx:'jingle',confetti:true};
+      renderPlayers();
+      break;
+
+    case 'act':{
+      const haveV=p.voucher>=c.cost,haveR=p.rewards.some(r=>!r.used&&!r.gift);
+      const r=await showModal({
+        icon:c.icon,title:'🎈 '+c.name,
+        desc:`来一场说走就走的趣动吧!\n🎫 花 <b>${fmtV(c.cost)} 代金券</b> 或 🎁 用 <b>1 个奖励券</b> 兑换`,
+        border:'blue',
+        btns:[
+          {label:`🎫 花 ${fmtV(c.cost)} 券安排!`,value:'voucher',cls:'primary',disabled:!haveV},
+          {label:'🎁 用 1 个奖励券安排!',value:'reward',cls:'pink',disabled:!haveR},
+          {label:'😴 下次再说',value:'no',cls:'gray'}
+        ]});
+      if(r==='voucher'){
+        p.voucher-=c.cost;
+        log(`${p.piece} 预约了「${c.name}」活动! 花 ${fmtV(c.cost)} 券 🎉`);
+        sfx.jingle();confetti();toast('趣动计划 +1 🎉','ok');
+        lastEv={log:`${p.piece} 预约了「${c.name}」活动! 花 ${fmtV(c.cost)} 券 🎉`,toast:['趣动计划 +1 🎉','ok'],sfx:'jingle',confetti:true};
+      }else if(r==='reward'){
+        consumeReward(p);
+        log(`${p.piece} 用 1 个奖励券兑换了「${c.name}」活动 🎉`);
+        sfx.jingle();confetti();toast('趣动计划 +1 🎉','ok');
+        lastEv={log:`${p.piece} 用 1 个奖励券兑换了「${c.name}」活动 🎉`,toast:['趣动计划 +1 🎉','ok'],sfx:'jingle',confetti:true};
+      }else{
+        log(`${p.piece} 路过「${c.name}」, 决定下次再去 😴`);
+        lastEv={log:`${p.piece} 路过「${c.name}」, 决定下次再去 😴`};
+      }
+      renderPlayers();
+      break;}
+
+    case 'penalty':
+      if(c.fine){
+        p.cash-=c.fine;
+        log(`${p.piece} 被罚款 ${c.fine} 元! 💸`);
+        sfx.buzz();
+        toast(`-${c.fine} 元罚款!${p.cash<0?' · 现金负了, 用抱抱抵债吧 😜':''}`,'bad');
+        lastEv={log:`${p.piece} 被罚款 ${c.fine} 元! 💸`,toast:[`-${c.fine} 元罚款!${p.cash<0?' · 现金负了, 用抱抱抵债吧 😜':''}`,'bad'],sfx:'buzz'};
+      }else{
+        await showModal({
+          icon:c.icon,title:'⚡ 惩罚时间!',
+          desc:c.action+'<br><span style="color:#c0558a">要真的执行哦, 不许耍赖! 😈</span>',
+          border:'red',
+          btns:[{label:'我冲! 去做! 🏃',value:'ok',cls:'primary'}]
+        });
+        log(`${p.piece} 接受了惩罚「${c.name}」${c.icon} — 正在执行中...`);
+        sfx.buzz();toast('惩罚执行完毕请举手 🙋','bad');
+        lastEv={log:`${p.piece} 接受了惩罚「${c.name}」${c.icon} — 正在执行中...`,toast:['惩罚执行完毕请举手 🙋','bad'],sfx:'buzz'};
+      }
+      renderPlayers();
+      break;
+  }
+}
+
+/* 【联网】掷骰: 只有当前回合玩家能执行。
+ * 流程: 本地掷骰 → 广播 dice(对方同步动画) → 本地行走/结算
+ *      → 切换回合 → 广播全量状态快照 */
+async function doRoll(){
+  if(!connected){toast('还没有连接对方!','bad');return;}
+  if(!state.started||state.busy)return;
+  if(state.turn!==myIdx){toast('还没轮到你哦 😄','bad');return;}
+  state.busy=true;updateRollBtn();
+  const n=await rollDice();
+  const p=players[state.turn];
+  $('#c-msg').textContent=`${p.piece} 掷出 ${n} 点, 前进 ${n} 步...`;
+  log(`🎲 ${p.piece} 掷出 <b>${n}</b> 点`);
+  send({t:'dice',n});               // 掷骰结果实时同步给对方
+  lastEv=null;
+  await walk(p,n);                  // 行走 (经过起点时发 event)
+  await land(p);                    // 结算 (弹窗只在本地, 结果记入 lastEv)
+  state.turn=1-state.turn;          // 切换回合
+  state.busy=false;state.turnLock=true;   // 上锁: 发送快照期间收到的对方快照先暂存
+  drainPending();                   // 应用本回合中对方发来的快照 (回合以本地为准)
+  sendState(lastEv);                // 广播权威全量快照
+  state.turnLock=false;
+  drainPending();                   // 补收发送间隙到达的快照
+  renderPlayers();updateRollBtn();
+}
+
+/* 【联网】回合进行中收到的对方快照先暂存, 回合结束后按序应用 */
+function receiveState(m){
+  if(state.busy||state.turnLock){pendingStates.push(m);return;}
+  applyState(m);
+}
+function drainPending(){
+  const q=pendingStates.splice(0);
+  q.forEach(m=>{m.turn=state.turn;applyState(m);});  // 暂存快照的回合信息以本地当前为准
+  if(pendingRestart){pendingRestart=false;applyRestart();}
+}
+
+/* 【联网】应用对方广播的全量快照: 整体替换本地数据并重绘 */
+function applyState(m){
+  stopWalk();
+  if(!state.started){                // 中途新加入(对局已在进行): 先搭好棋盘
+    state.started=true;
+    const b=$('#board');b.innerHTML='';
+    buildBoard();addPieces();
+  }
+  players=m.players.map(p=>Object.assign({el:null},p));
+  players.forEach((p,i)=>{p.el=document.querySelectorAll('.piece')[i]||null;});
+  state.turn=m.turn;
+  waiting=false;
+  if(m.ev)applyEv(m.ev);
+  renderPlayers();updateRollBtn();
+}
+
+/* ================== 弹窗页面 ================== */
+function openBackpack(){
+  const rows=players.map(p=>{
+    const list=p.rewards.filter(r=>!r.used)
+      .map(r=>`<div class="m-row"><span>${r.icon} ${r.name} <span style="font-size:11px;color:#b9aecf">${r.desc}</span></span><button class="btn small pink" data-use="${p.id-1}">兑现! 🎉</button></div>`).join('')
+      ||'<div class="m-row"><span>还没有奖励券, 快去踩奖励格/礼物券格吧~</span></div>';
+    return `<h3 style="margin:10px 0 4px;color:#5b4a70">${p.piece} ${p.name} 的背包</h3>${list}`;
+  }).join('');
+  showModal({
+    icon:'🎒',title:'奖励背包',html:rows,border:'pink',
+    btns:[{label:'✖ 关闭',value:'close',cls:'gray'}],
+    after:m=>{
+      m.querySelectorAll('[data-use]').forEach(b=>b.onclick=()=>{
+        const p=players[+b.dataset.use];
+        const r=p.rewards.find(x=>!x.used);
+        if(r){
+          r.used=true;
+          log(`${p.piece} 兑现了「${r.name}」${r.icon} — 快去行动吧! 🎉`);
+          sfx.jingle();confetti();
+          toast(r.gift?'快去买礼物送给对方吧 🎀':'快去兑现你的奖励吧 🎉','ok');
+          renderPlayers();
+          /* 【联网】背包变化立即广播全量快照, 保证双方背包严格同步 */
+          sendState({log:`${p.piece} 兑现了「${r.name}」${r.icon} — 快去行动吧! 🎉`,
+            toast:[r.gift?'快去买礼物送给对方吧 🎀':'快去兑现你的奖励吧 🎉','ok'],sfx:'jingle',confetti:true});
+          b.closest('.overlay').remove();
+        }
+      });
+    }
+  });
+}
+
+function openStats(){
+  const rows=players.map(p=>{
+    const nReward=p.rewards.filter(r=>!r.used&&!r.gift).length;
+    const nGift=p.rewards.filter(r=>!r.used&&r.gift).length;
+    const total=p.cash+p.voucher;
+    return `<div class="m-row"><span>${p.piece} ${p.name}</span><span class="v">总资产 ${fmtV(total)}</span></div>
+    <div style="font-size:12px;color:#8a7aa8;font-weight:700;padding:2px 4px 8px">
+    现金 ${fmtCash(p.cash)}元 · 代金券 ${fmtV(p.voucher)} · 奖励券 ${nReward}张 · 礼物券 ${nGift}张</div>`;
+  }).join('');
+  const totals=players.map(p=>({p,t:p.cash+p.voucher}));
+  totals.sort((a,b)=>b.t-a.t);
+  const best=totals[0].t===totals[1].t
+    ?'🤝 平局! 你们俩都是大富翁, 那就一起庆祝吧!'
+    :`${totals[0].p.piece} ${totals[0].p.name} 是今天的大富翁!\n${totals[1].p.piece} ${totals[1].p.name} 要满足对方一个小愿望哦 😏`;
+  showModal({
+    icon:'🏆',title:'资产结算',border:'gold',
+    html:rows+`<div class="m-desc" style="margin-top:10px">${best}</div>`,
+    btns:[
+      {label:'🔁 再来一局',value:'restart',cls:'primary'},
+      {label:'✖ 关闭',value:'close',cls:'gray'}
+    ]
+  }).then(v=>{if(v==='restart')restartGame();});
+}
+
+function openHelp(){
+  showModal({
+    icon:'📖',title:'玩法说明',border:'gray',
+    html:`<div class="rules">
+      🎲 轮流掷骰子, 骰子出现几就走几步<br>
+      🏁 起点: 每经过一圈领 5000 代金券工资<br>
+      🎁 奖励格: 得现金或奖励券 (奖励券存背包, 随时兑现!)<br>
+      🎈 活动格: 花代金券或消耗 1 个奖励券, 记下一场趣动计划!<br>
+      🎀 礼物券格: 获得一张礼物券, 给对方买份惊喜小礼物!<br>
+      ⚡ 惩罚格: 现金罚款, 或当场执行小惩罚<br>
+      💰 初始现金 5 元 · 代金券 20万<br>
+      😝 现金花光可以欠债, 记得用抱抱抵!<br>
+      📡 联网: 创建房间等对方加入, 或输房间号加入对方!</div>`,
+    btns:[{label:'✌️ 明白啦',value:'close',cls:'primary'}]
+  });
+}
+
+/* ================== 【联网】PeerJS 核心 ================== */
+
+/* 创建房间 = 主机 (玩家1 🐻, 先手)。房间号即 Peer ID 的一部分 */
+function createRoom(){
+  if(!checkPeerLib())return;
+  if(hosting||joining)return;
+  if(peer){try{peer.destroy();}catch(e){}peer=null;conn=null;}
+  hostName=$('#myname').value.trim()||'熊宝';
+  roomCode=genCode();
+  hosting=true;
+  $('#roomcode').textContent=roomCode;
+  $('#lv-menu').style.display='none';$('#lv-host').style.display='';$('#lv-join').style.display='none';
+  updateConnUI();
+  newHostPeer(0);
+}
+
+/* 【联网】生成 6 位房间号 */
+function genCode(){return String(Math.floor(100000+Math.random()*900000));}
+
+/* 【联网】主机创建 Peer (失败/房间号被占用时换号重试) */
+function newHostPeer(attempt){
+  attempt=attempt||0;
+  try{if(peer)peer.destroy();}catch(e){}
+  peer=new Peer(PEER_PREFIX+roomCode);
+  peer.on('open',()=>{});
+  peer.on('connection',c=>{                 // 对方加入 → 建立数据连接
+    if(conn&&conn.open&&conn!==c){try{c.close();}catch(e){}return;}  // 只保留最新连接
+    conn=c;
+    conn.on('data',d=>handleMsg(d));
+    conn.on('close',()=>onConnClosed());
+    conn.on('error',()=>onConnClosed());
+  });
+  peer.on('error',e=>{
+    if(e&&e.type==='unavailable-id'&&attempt<5){   // 房间号被占用, 换号重试
+      roomCode=genCode();$('#roomcode').textContent=roomCode;
+      setTimeout(()=>newHostPeer(attempt+1),800);
+    }else if(e&&e.type==='unavailable-id'){
+      toast('创建房间失败, 请重试','bad');
+    }else{
+      toast('连接服务器失败: '+((e&&e.type)||'未知错误'),'bad');
+    }
+  });
+  peer.on('disconnected',()=>{try{peer.reconnect();}catch(e){}});  // 信号服务器断线自动重连
+}
+
+/* 【联网】加入房间 = 玩家2 (🐰) */
+function doJoin(){
+  if(!checkPeerLib())return;
+  if(hosting||joining)return;
+  const code=($('#joincode').value||'').trim();
+  if(!/^\d{6}$/.test(code)){toast('请输入 6 位数字房间号','bad');return;}
+  guestName=$('#myname').value.trim()||'兔宝';
+  roomCode=code;joining=true;
+  if(peer){try{peer.destroy();}catch(e){}peer=null;conn=null;}
+  updateConnUI();
+  const t0=setTimeout(()=>{if(joining&&!connected){joining=false;updateConnUI();toast('连接超时, 请确认房间号','bad');}},20000);
+  peer=new Peer();
+  peer.on('open',()=>{
+    conn=peer.connect(PEER_PREFIX+roomCode);
+    conn.on('open',()=>{
+      clearTimeout(t0);
+      connected=true;joining=false;waiting=false;
+      updateConnUI();
+      toast('已连接! 等待对方开始 🎈','ok');
+      send({t:'hi',name:guestName});            // 上报昵称, 主机收到后开局
+    });
+    conn.on('data',d=>handleMsg(d));
+    conn.on('close',()=>onConnClosed());
+    conn.on('error',()=>onConnClosed());
+  });
+  peer.on('error',e=>{
+    clearTimeout(t0);joining=false;updateConnUI();
+    if(e&&e.type==='peer-unavailable')toast('房间不存在或已解散 😢','bad');
+    else toast('连接失败: '+((e&&e.type)||'未知错误'),'bad');
+  });
+  peer.on('disconnected',()=>{if(joining){try{peer.reconnect();}catch(e){}}});
+}
+
+/* 【联网】消息分发 */
+function handleMsg(m){
+  if(!m||typeof m!=='object'||!m.t)return;
+  switch(m.t){
+    case 'hi':{   // 加入者上报昵称
+      guestName=m.name||'兔宝';
+      if(state.started){                       // 已在对局中 → 对方重连: 直接发当前快照恢复
+        connected=true;waiting=false;discModal=false;closeLastOverlay();
+        updateConnUI();
+        toast('对方已重新连接 🎈','ok');
+        sendState({log:`🔗 ${guestName} 重新连接`,toast:['对方已重新连接 🎈','ok'],sfx:'jingle'});
+      }else{                                   // 首次加入 → 开局
+        connected=true;waiting=false;updateConnUI();
+        startGame();
+      }
+      break;}
+    case 'start':   // 主机发来的开局数据
+      discModal=false;closeLastOverlay();
+      initGame(m.players[0].name,m.players[1].name);
+      hideLobby();updateConnUI();
+      log(`🔗 已连接 ${guestName}, 开战!`);
+      break;
+    case 'dice':receiveDice(m);break;          // 对方掷骰 → 本机同步动画
+    case 'event':applyEv(m.ev);break;          // 对方途中事件 (过起点领工资等)
+    case 'state':                              // 对方全量快照
+      hideLobby();updateConnUI();              // 中途加入对局时, 收快照即进入游戏
+      receiveState(m);
+      break;
+    case 'restart':                            // 对方再来一局
+      if(state.busy||state.turnLock){pendingRestart=true;}  // 本机回合中则稍后执行
+      else applyRestart();
+      break;
+  }
+}
+
+/* 【联网】主机开局: 本地初始化 + 把双方数据发给对方 */
+function startGame(){
+  initGame(hostName,guestName);
+  send({t:'start',players:snapPlayers()});
+  hideLobby();updateConnUI();
+  log(`🔗 ${guestName} 加入, 开战!`);
+}
+
+/* 【联网】对方掷骰: 显示骰子动画, 并播放对方棋子行走动画 */
+function receiveDice(m){
+  if(state.busy)return;
+  const p=players[state.turn];
+  if(!p)return;
+  waiting=true;                       // 进入"等待对方操作"状态
+  renderPlayers();updateRollBtn();
+  showDieRollingTo(m.n);
+  log(`🎲 ${p.piece} 掷出 <b>${m.n}</b> 点`);
+  walk(p,m.n,{display:true});         // 纯展示动画, 结算等对方快照
+}
+
+/* 【联网】断线处理 */
+function onConnClosed(){
+  if(!connected)return;
+  connected=false;waiting=false;
+  updateRollBtn();renderPlayers();updateConnUI();
+  if(state.started)showDisconnectModal();
+  else{showLobby();toast('连接已断开','bad');}
+}
+
+/* 【联网】断线弹窗: 主机等待对方重进; 加入者一键重连 */
+function showDisconnectModal(){
+  if(discModal)return;discModal=true;
+  const isHost=myIdx===0;
+  showModal({
+    icon:'📡',title:'连接已断开',desc:isHost
+      ?'对方连接已断开...\n点击「继续等待」后, 对方重新输入本房间号即可恢复'
+      :`与房间 ${roomCode} 的连接中断了`,
+    border:'red',
+    btns:isHost
+      ?[{label:'⏳ 继续等待',value:'wait',cls:'primary'},{label:'🏠 返回大厅',value:'lobby',cls:'gray'}]
+      :[{label:'🔁 重新连接',value:'rejoin',cls:'primary'},{label:'🏠 返回大厅',value:'lobby',cls:'gray'}]
+  }).then(v=>{
+    discModal=false;
+    if(v==='rejoin')rejoin();
+    else if(v==='lobby'){showLobby();}
+    else toast('等待对方重新加入...','ok');
+  });
+}
+
+/* 【联网】加入者重连: 新 Peer + 连接同一房间号, 主机收到 hi 后自动发快照恢复 */
+function rejoin(){
+  if(!checkPeerLib())return;
+  joining=true;updateConnUI();
+  const t0=setTimeout(()=>{if(joining&&!connected){joining=false;updateConnUI();toast('重连超时, 请手动重试','bad');discModal=false;showDisconnectModal();}},20000);
+  if(peer){try{peer.destroy();}catch(e){}peer=null;conn=null;}
+  peer=new Peer();
+  peer.on('open',()=>{
+    conn=peer.connect(PEER_PREFIX+roomCode);
+    conn.on('open',()=>{
+      clearTimeout(t0);
+      connected=true;joining=false;waiting=false;
+      updateConnUI();
+      toast('已重新连接 🎈','ok');
+      send({t:'hi',name:guestName});
+    });
+    conn.on('data',d=>handleMsg(d));
+    conn.on('close',()=>onConnClosed());
+    conn.on('error',()=>onConnClosed());
+  });
+  peer.on('error',e=>{
+    clearTimeout(t0);joining=false;updateConnUI();
+    toast('重连失败: '+((e&&e.type)||'未知错误'),'bad');
+    discModal=false;showDisconnectModal();
+  });
+  peer.on('disconnected',()=>{if(joining){try{peer.reconnect();}catch(e){}}});
+}
+
+/* 【联网】再来一局 (任一玩家可发起, 双方同时重置) */
+function restartGame(){
+  if(!connected){toast('还没有连接对方!','bad');return;}
+  if(state.busy||state.turnLock){toast('⏳ 等本回合结束后再重开','bad');return;}
+  const n0=players[0].name,n1=players[1].name;
+  initGame(n0,n1);
+  send({t:'restart'});
+  log('🔁 再来一局!');
+}
+function applyRestart(){
+  const n0=players[0].name,n1=players[1].name;
+  initGame(n0,n1);
+  log('🔁 对方发起了再来一局!');
+  toast('对方发起了再来一局 🔁','ok');
+}
+
+/* ================== 【联网】大厅 / 顶部状态 ================== */
+function checkPeerLib(){
+  if(typeof Peer!=='undefined')return true;
+  toast('联网组件加载失败, 请检查网络后刷新页面','bad');
+  return false;
+}
+
+function hideLobby(){$('#lobby').style.display='none';}
+function showLobby(){
+  teardown();
+  $('#lobby').style.display='';
+  backToMenu();
+  $('#exitbtn').style.display='none';
+  updateConnUI();updateRollBtn();
+}
+function backToMenu(){
+  if(!connected&&peer){try{peer.destroy();}catch(e){}peer=null;conn=null;}
+  hosting=false;joining=false;
+  $('#lv-menu').style.display='';$('#lv-host').style.display='none';$('#lv-join').style.display='none';
+  updateConnUI();updateRollBtn();
+}
+function showJoinView(){
+  if(!connected&&peer){try{peer.destroy();}catch(e){}peer=null;conn=null;}
+  hosting=false;joining=false;
+  $('#lv-menu').style.display='none';$('#lv-host').style.display='none';$('#lv-join').style.display='';
+  updateConnUI();
+}
+function teardown(){
+  try{if(conn&&conn.open)conn.close();}catch(e){}
+  try{if(peer)peer.destroy();}catch(e){}
+  peer=null;conn=null;connected=false;hosting=false;joining=false;waiting=false;
+  pendingStates.length=0;pendingRestart=false;
+  discModal=false;closeLastOverlay();
+  state.started=false;
+}
+function exitToLobby(){
+  showModal({
+    icon:'🚪',title:'退出对局',
+    desc:'确定退出当前对局并返回大厅吗?\n退出后需要重新配对才能继续游戏',
+    border:'gray',
+    btns:[{label:'✖ 继续游戏',value:'no',cls:'gray'},{label:'🏠 退出',value:'exit',cls:'primary'}]
+  }).then(v=>{if(v==='exit')showLobby();});
+}
+
+/* 【联网】顶部连接状态条 + 掷骰按钮状态 */
+function updateConnUI(){
+  const st=$('#connstatus'),rm=$('#connroom'),ex=$('#exitbtn');
+  st.classList.remove('cs-ok');
+  if(connected){
+    st.textContent='🎈 已连接';st.classList.add('cs-ok');
+    rm.textContent=`房间 ${roomCode} · 对方 ${guestName}`;
+    ex.style.display='';
+  }else if(hosting){
+    st.textContent='📡 等待对方加入';
+    rm.textContent=`房间 ${roomCode}`;
+    ex.style.display='none';
+  }else if(joining){
+    st.textContent='📡 连接中...';
+    rm.textContent=`房间 ${roomCode}`;
+    ex.style.display='none';
+  }else{
+    st.textContent='⏳ 未连接';rm.textContent='';ex.style.display='none';
+  }
+}
+function updateRollBtn(){
+  const b=$('#roll');
+  const myTurn=connected&&state.started&&!waiting&&state.turn===myIdx;
+  b.disabled=!(myTurn&&!state.busy);
+  if(!connected)b.textContent='⏳ 未连接';
+  else if(!state.started)b.textContent='🎲 掷骰子!';
+  else if(state.busy)b.textContent='🚶 走步中...';
+  else if(myTurn)b.textContent='🎲 掷骰子!';
+  else b.textContent='⏳ 等待对方掷骰...';
+}
+
+/* ================== 启动 ================== */
+showLobby();
+</script>
+</body>
+</html>
