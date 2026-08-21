@@ -1,0 +1,841 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>💕 情侣大富翁 💕</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+body{font-family:'Microsoft YaHei','PingFang SC',sans-serif;background:linear-gradient(135deg,#FFE5EC 0%,#FFF5E1 50%,#E8F8F5 100%);min-height:100vh;overflow-x:hidden;}
+
+/* ===== LOBBY ===== */
+.lobby-overlay{position:fixed;inset:0;background:linear-gradient(135deg,#FF9A9E 0%,#FECFEF 30%,#FFECD2 70%,#A8EDEA 100%);display:flex;align-items:center;justify-content:center;z-index:1000;}
+.lobby-box{background:white;border-radius:30px;padding:40px 36px;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,0.15);max-width:480px;width:90%;animation:bounceIn .6s ease;}
+.lobby-box h1{font-size:32px;margin-bottom:6px;background:linear-gradient(135deg,#FF6B6B,#FF8E53);-webkit-background-clip:text;-webkit-text-fill-color:transparent;}
+.lobby-box .subtitle{font-size:14px;color:#999;margin-bottom:24px;}
+.lobby-box .emoji-row{font-size:44px;margin-bottom:16px;}
+.name-input{display:flex;align-items:center;gap:10px;margin:10px 0 20px;background:#FFF5F5;border-radius:14px;padding:10px 14px;}
+.name-input .av{width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:bold;color:white;flex-shrink:0;background:linear-gradient(135deg,#FF6B6B,#EE5A24);}
+.name-input input{border:none;background:transparent;font-size:15px;flex:1;outline:none;color:#333;}
+.name-input input::placeholder{color:#ccc;}
+.lobby-btns{display:flex;gap:12px;justify-content:center;margin-bottom:16px;}
+.lobby-btn{padding:12px 28px;font-size:15px;color:white;border:none;border-radius:50px;cursor:pointer;transition:all .3s;font-weight:bold;}
+.lobby-btn:hover{transform:translateY(-2px);}
+.lobby-btn.create{background:linear-gradient(135deg,#FF6B6B,#FF8E53);box-shadow:0 4px 15px rgba(255,107,107,0.4);}
+.lobby-btn.join{background:linear-gradient(135deg,#4ECDC4,#44BD96);box-shadow:0 4px 15px rgba(78,205,196,0.4);}
+.lobby-status{font-size:13px;color:#888;margin-top:12px;min-height:20px;}
+.room-code-box{display:none;margin:16px 0;background:#F8F9FA;border-radius:16px;padding:20px;}
+.room-code-box.show{display:block;}
+.room-code-label{font-size:13px;color:#888;margin-bottom:8px;}
+.room-code-display{font-size:42px;font-weight:bold;letter-spacing:12px;color:#6C5CE7;font-family:'Courier New',monospace;user-select:all;cursor:pointer;}
+.room-code-hint{font-size:12px;color:#aaa;margin-top:8px;}
+.join-box{display:none;margin:16px 0;}
+.join-box.show{display:block;}
+.join-box input{border:2px solid #E0E0E0;border-radius:14px;padding:12px 16px;font-size:28px;font-weight:bold;text-align:center;letter-spacing:10px;text-transform:uppercase;width:100%;max-width:200px;outline:none;color:#333;font-family:'Courier New',monospace;}
+.join-box input:focus{border-color:#6C5CE7;}
+.join-box .join-submit{display:block;margin:14px auto 0;padding:10px 32px;font-size:15px;color:white;border:none;border-radius:50px;background:linear-gradient(135deg,#6C5CE7,#A29BFE);cursor:pointer;font-weight:bold;}
+.waiting-anim{display:inline-block;animation:pulse 1.5s infinite;}
+.copy-tip{font-size:12px;color:#6C5CE7;margin-top:4px;cursor:pointer;}
+
+/* ===== GAME LAYOUT ===== */
+.game-container{display:flex;gap:16px;max-width:1200px;margin:16px auto;padding:0 16px;min-height:calc(100vh - 32px);}
+.board-wrapper{flex-shrink:0;position:relative;}
+.side-panel{flex:1;display:flex;flex-direction:column;gap:12px;min-width:240px;max-width:300px;}
+
+/* ===== BOARD ===== */
+.board{display:grid;grid-template-columns:80px repeat(6,68px) 80px;grid-template-rows:80px repeat(6,68px) 80px;width:fit-content;background:white;border-radius:20px;padding:4px;box-shadow:0 10px 40px rgba(0,0,0,0.1);position:relative;}
+.space{border-radius:10px;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:default;position:relative;transition:all .3s;border:2px solid transparent;font-size:11px;text-align:center;line-height:1.3;padding:2px;overflow:hidden;}
+.space:hover{transform:scale(1.08);z-index:10;box-shadow:0 4px 15px rgba(0,0,0,0.15);}
+.space .s-icon{font-size:22px;margin-bottom:1px;}
+.space .s-name{font-weight:bold;font-size:10px;color:#555;}
+.space .s-cost{font-size:9px;color:#999;margin-top:1px;}
+.space .owner-tag{position:absolute;bottom:2px;right:3px;font-size:8px;padding:1px 4px;border-radius:4px;color:white;font-weight:bold;}
+.space-start{background:linear-gradient(135deg,#FFF9C4,#FFF176);border-color:#FFD54F;}
+.space-travel{background:linear-gradient(135deg,#E3F2FD,#BBDEFB);border-color:#90CAF9;}
+.space-shop{background:linear-gradient(135deg,#FCE4EC,#F8BBD0);border-color:#F48FB1;}
+.space-reward{background:linear-gradient(135deg,#E8F5E9,#A5D6A7);border-color:#81C784;}
+.space-punish{background:linear-gradient(135deg,#FFF3E0,#FFCC80);border-color:#FFB74D;}
+
+/* board center */
+.board-center{grid-column:2/8;grid-row:2/8;border-radius:16px;background:linear-gradient(135deg,#FFF8E1,#FFECB3);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:10px;position:relative;}
+.board-title{font-size:22px;font-weight:bold;background:linear-gradient(135deg,#FF6B6B,#FF8E53,#FFD93D);-webkit-background-clip:text;-webkit-text-fill-color:transparent;}
+.turn-indicator{font-size:13px;color:#666;padding:4px 16px;border-radius:20px;transition:all .3s;}
+.turn-indicator.p1-turn{background:#FFE0E0;color:#FF6B6B;}
+.turn-indicator.p2-turn{background:#D4F5F0;color:#4ECDC4;}
+.conn-status{font-size:11px;padding:2px 10px;border-radius:10px;background:#E8F5E9;color:#4CAF50;}
+.conn-status.disconnected{background:#FFEBEE;color:#F44336;}
+
+/* DICE */
+.dice-container{display:flex;flex-direction:column;align-items:center;gap:8px;}
+.dice{width:64px;height:64px;background:white;border-radius:12px;box-shadow:0 4px 15px rgba(0,0,0,0.1),inset 0 -2px 0 rgba(0,0,0,0.05);display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(3,1fr);padding:8px;gap:2px;transition:transform .1s;}
+.dice.rolling{animation:diceShake .1s infinite;}
+.dot{width:100%;height:100%;border-radius:50%;background:transparent;}
+.dot.show{background:radial-gradient(circle,#333 60%,#555 100%);box-shadow:inset 0 1px 2px rgba(0,0,0,0.3);}
+.roll-btn{padding:10px 36px;font-size:16px;color:white;border:none;border-radius:50px;background:linear-gradient(135deg,#6C5CE7,#A29BFE);cursor:pointer;box-shadow:0 4px 15px rgba(108,92,231,0.4);transition:all .3s;font-weight:bold;}
+.roll-btn:hover:not(:disabled){transform:translateY(-2px);box-shadow:0 6px 20px rgba(108,92,231,0.5);}
+.roll-btn:disabled{opacity:0.4;cursor:not-allowed;transform:none;}
+.waiting-text{font-size:12px;color:#999;animation:pulse 1.5s infinite;}
+
+/* TOKENS */
+.token{position:absolute;width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:bold;color:white;z-index:20;transition:left .3s ease,top .3s ease;box-shadow:0 3px 8px rgba(0,0,0,0.25);pointer-events:none;border:2px solid white;}
+.token.p1{background:linear-gradient(135deg,#FF6B6B,#EE5A24);}
+.token.p2{background:linear-gradient(135deg,#4ECDC4,#44BD96);}
+.token.active{animation:tokenBounce .5s ease;}
+
+/* PLAYER PANELS */
+.player-panel{border-radius:16px;padding:16px;box-shadow:0 4px 15px rgba(0,0,0,0.08);}
+.player-panel.p1{background:linear-gradient(135deg,#FFF5F5,#FFE0E0);border:2px solid #FFB3B3;}
+.player-panel.p2{background:linear-gradient(135deg,#F0FFFE,#D4F5F0);border:2px solid #A3E4DB;}
+.player-panel .panel-header{display:flex;align-items:center;gap:10px;margin-bottom:10px;}
+.player-panel .panel-avatar{width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:18px;color:white;font-weight:bold;}
+.player-panel.p1 .panel-avatar{background:linear-gradient(135deg,#FF6B6B,#EE5A24);}
+.player-panel.p2 .panel-avatar{background:linear-gradient(135deg,#4ECDC4,#44BD96);}
+.player-panel .panel-name{font-size:16px;font-weight:bold;color:#333;}
+.player-panel .panel-name .tag{font-size:10px;background:#FFD93D;color:#333;padding:2px 6px;border-radius:8px;margin-left:6px;font-weight:normal;}
+.player-panel.active-panel{box-shadow:0 0 0 3px rgba(108,92,231,0.4),0 4px 15px rgba(0,0,0,0.08);}
+.stat-row{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px dashed rgba(0,0,0,0.1);font-size:13px;}
+.stat-row:last-child{border-bottom:none;}
+.stat-label{color:#888;}
+.stat-value{font-weight:bold;color:#333;}
+.stat-value.money{color:#FF6B6B;}
+.stat-value.voucher{color:#6C5CE7;}
+.items-list{max-height:80px;overflow-y:auto;margin-top:6px;}
+.items-list::-webkit-scrollbar{width:4px;}
+.items-list::-webkit-scrollbar-thumb{background:#ddd;border-radius:2px;}
+.item-tag{display:inline-block;font-size:11px;padding:3px 8px;border-radius:10px;margin:2px;background:white;box-shadow:0 1px 3px rgba(0,0,0,0.1);}
+.rewards-list{max-height:70px;overflow-y:auto;margin-top:4px;}
+.rewards-list::-webkit-scrollbar{width:4px;}
+.rewards-list::-webkit-scrollbar-thumb{background:#ddd;border-radius:2px;}
+.reward-item{font-size:11px;padding:3px 8px;background:white;border-radius:8px;margin:2px 0;box-shadow:0 1px 3px rgba(0,0,0,0.1);}
+.section-label{font-size:11px;color:#999;margin-top:6px;}
+
+/* GAME LOG */
+.log-panel{flex:1;background:white;border-radius:16px;padding:14px;box-shadow:0 4px 15px rgba(0,0,0,0.08);overflow:hidden;display:flex;flex-direction:column;}
+.log-title{font-size:14px;font-weight:bold;color:#333;margin-bottom:8px;}
+.log-content{flex:1;overflow-y:auto;font-size:12px;line-height:1.8;}
+.log-content::-webkit-scrollbar{width:4px;}
+.log-content::-webkit-scrollbar-thumb{background:#ddd;border-radius:2px;}
+.log-entry{padding:4px 0;border-bottom:1px solid #f5f5f5;animation:fadeInLog .3s ease;}
+.log-entry .lp{font-weight:bold;}
+.log-entry.p1-log .lp{color:#FF6B6B;}
+.log-entry.p2-log .lp{color:#4ECDC4;}
+
+/* EVENT MODAL */
+.event-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.5);display:none;align-items:center;justify-content:center;z-index:500;}
+.event-overlay.show{display:flex;}
+.event-card{background:white;border-radius:24px;padding:30px;max-width:400px;width:90%;text-align:center;animation:cardPop .4s ease;box-shadow:0 20px 60px rgba(0,0,0,0.2);}
+.event-card .event-icon{font-size:56px;margin-bottom:10px;}
+.event-card .event-type{font-size:12px;color:#999;text-transform:uppercase;letter-spacing:2px;margin-bottom:4px;}
+.event-card .event-title{font-size:22px;font-weight:bold;margin-bottom:8px;}
+.event-card .event-desc{font-size:14px;color:#666;margin-bottom:6px;line-height:1.6;white-space:pre-line;}
+.event-card .event-cost{font-size:16px;font-weight:bold;margin:10px 0;color:#6C5CE7;}
+.event-card .event-actions{display:flex;gap:10px;justify-content:center;margin-top:16px;flex-wrap:wrap;}
+.event-btn{padding:10px 24px;border:none;border-radius:50px;font-size:14px;cursor:pointer;transition:all .3s;font-weight:bold;}
+.event-btn:hover{transform:translateY(-2px);}
+.event-btn.primary{background:linear-gradient(135deg,#6C5CE7,#A29BFE);color:white;box-shadow:0 4px 15px rgba(108,92,231,0.3);}
+.event-btn.secondary{background:#f0f0f0;color:#666;}
+.event-btn.reward-btn{background:linear-gradient(135deg,#00B894,#55EFC4);color:white;box-shadow:0 4px 15px rgba(0,184,148,0.3);}
+.event-btn.punish-btn{background:linear-gradient(135deg,#FDCB6E,#F39C12);color:white;box-shadow:0 4px 15px rgba(243,156,18,0.3);}
+.event-btn.skip-btn{background:#f0f0f0;color:#999;}
+.event-card.reward-card{border:3px solid #A5D6A7;}
+.event-card.punish-card{border:3px solid #FFCC80;}
+.event-card.travel-card{border:3px solid #90CAF9;}
+.event-card.shop-card{border:3px solid #F48FB1;}
+.event-card.start-card{border:3px solid #FFD54F;}
+.event-card.info-card{border:3px solid #90CAF9;}
+
+/* CONFETTI */
+.confetti{position:fixed;width:10px;height:10px;border-radius:50%;z-index:999;pointer-events:none;animation:confettiFall 1.5s ease-out forwards;}
+
+/* ANIMATIONS */
+@keyframes bounceIn{0%{transform:scale(0.3);opacity:0;}50%{transform:scale(1.05);}70%{transform:scale(0.95);}100%{transform:scale(1);opacity:1;}}
+@keyframes cardPop{0%{transform:scale(0.5) rotate(-5deg);opacity:0;}100%{transform:scale(1) rotate(0);opacity:1;}}
+@keyframes fadeIn{from{opacity:0;}to{opacity:1;}}
+@keyframes fadeInLog{from{opacity:0;transform:translateX(-10px);}to{opacity:1;transform:translateX(0);}}
+@keyframes diceShake{0%{transform:rotate(0deg) scale(1);}25%{transform:rotate(8deg) scale(1.05);}50%{transform:rotate(-8deg) scale(0.95);}75%{transform:rotate(5deg) scale(1.02);}100%{transform:rotate(0deg) scale(1);}}
+@keyframes tokenBounce{0%{transform:translateY(0);}30%{transform:translateY(-12px);}50%{transform:translateY(-5px);}70%{transform:translateY(-8px);}100%{transform:translateY(0);}}
+@keyframes confettiFall{0%{opacity:1;transform:translateY(0) rotate(0deg);}100%{opacity:0;transform:translateY(100vh) rotate(720deg);}}
+@keyframes pulse{0%,100%{opacity:1;}50%{opacity:0.4;}}
+
+/* RESPONSIVE */
+@media(max-width:900px){
+.game-container{flex-direction:column;align-items:center;}
+.side-panel{flex-direction:row;flex-wrap:wrap;max-width:100%;min-width:0;}
+.player-panel,.log-panel{flex:1;min-width:200px;}
+}
+@media(max-width:640px){
+.board{grid-template-columns:60px repeat(6,48px) 60px;grid-template-rows:60px repeat(6,48px) 60px;}
+.space .s-icon{font-size:16px;}.space .s-name{font-size:8px;}.space .s-cost{font-size:7px;}
+.board-title{font-size:16px;}.dice{width:50px;height:50px;padding:6px;}
+.token{width:22px;height:22px;font-size:10px;}
+}
+</style>
+</head>
+<body>
+
+<!-- ===== LOBBY ===== -->
+<div class="lobby-overlay" id="lobbyScreen">
+<div class="lobby-box">
+  <div class="emoji-row">🎲🎲💕🎲🎲</div>
+  <h1>情侣大富翁</h1>
+  <p class="subtitle">超甜超有趣的情侣专属联网桌游</p>
+  <div class="name-input">
+    <div class="av" id="myAvatar">?</div>
+    <input type="text" id="myName" placeholder="输入你的昵称" maxlength="6" value="">
+  </div>
+  <div id="lobbyMain">
+    <div class="lobby-btns">
+      <button class="lobby-btn create" onclick="createRoom()">🎮 创建房间</button>
+      <button class="lobby-btn join" onclick="showJoinBox()">🔗 加入房间</button>
+    </div>
+    <div class="lobby-status" id="lobbyStatus"></div>
+  </div>
+  <div class="room-code-box" id="createBox">
+    <div class="room-code-label">你的房间号（分享给另一半）</div>
+    <div class="room-code-display" id="roomCodeDisplay" onclick="copyCode()">----</div>
+    <div class="copy-tip" onclick="copyCode()">📋 点击复制</div>
+    <div class="room-code-hint">等待对方加入...<span class="waiting-anim">⏳</span></div>
+  </div>
+  <div class="join-box" id="joinBox">
+    <div class="room-code-label">输入对方的房间号</div>
+    <input type="text" id="joinCodeInput" placeholder="ABCD" maxlength="4" oninput="this.value=this.value.toUpperCase()">
+    <button class="join-submit" onclick="joinRoom()">进入房间</button>
+  </div>
+</div>
+</div>
+
+<!-- ===== GAME ===== -->
+<div class="game-container" id="gameScreen" style="display:none;">
+<div class="board-wrapper">
+  <div class="board" id="board">
+    <div class="board-center" id="boardCenter">
+      <div class="board-title">💕 情侣大富翁 💕</div>
+      <div class="conn-status" id="connStatus">已连接</div>
+      <div class="turn-indicator p1-turn" id="turnIndicator">-- 的回合</div>
+      <div class="dice-container">
+        <div class="dice" id="dice">
+          <div class="dot" data-pos="1"></div><div class="dot" data-pos="2"></div><div class="dot" data-pos="3"></div>
+          <div class="dot" data-pos="4"></div><div class="dot" data-pos="5"></div><div class="dot" data-pos="6"></div>
+          <div class="dot" data-pos="7"></div><div class="dot" data-pos="8"></div><div class="dot" data-pos="9"></div>
+        </div>
+        <button class="roll-btn" id="rollBtn" onclick="rollDice()" disabled>🎲 掷骰子</button>
+        <div class="waiting-text" id="waitingText" style="display:none;">等待对方掷骰子...</div>
+      </div>
+    </div>
+  </div>
+  <div class="token p1" id="token0">A</div>
+  <div class="token p2" id="token1">B</div>
+</div>
+<div class="side-panel">
+  <div class="player-panel p1" id="panel0">
+    <div class="panel-header"><div class="panel-avatar" id="avatar0">A</div><div class="panel-name" id="panelName0">玩家1</div></div>
+    <div class="stat-row"><span class="stat-label">💰 零花钱</span><span class="stat-value money" id="money0">5.00 元</span></div>
+    <div class="stat-row"><span class="stat-label">🎫 代金券</span><span class="stat-value voucher" id="voucher0">200,000</span></div>
+    <div class="stat-row"><span class="stat-label">🎁 奖励卡</span><span class="stat-value" id="rewardCount0">0 张</span></div>
+    <div class="stat-row"><span class="stat-label">🛍️ 已购</span><span class="stat-value" id="itemCount0">0 件</span></div>
+    <div class="section-label">🛍️ 物品</div><div class="items-list" id="items0"><span style="font-size:11px;color:#ccc;">暂无</span></div>
+    <div class="section-label">🎁 奖励</div><div class="rewards-list" id="rewards0"><span style="font-size:11px;color:#ccc;">暂无</span></div>
+  </div>
+  <div class="player-panel p2" id="panel1">
+    <div class="panel-header"><div class="panel-avatar" id="avatar1">B</div><div class="panel-name" id="panelName1">玩家2</div></div>
+    <div class="stat-row"><span class="stat-label">💰 零花钱</span><span class="stat-value money" id="money1">5.00 元</span></div>
+    <div class="stat-row"><span class="stat-label">🎫 代金券</span><span class="stat-value voucher" id="voucher1">200,000</span></div>
+    <div class="stat-row"><span class="stat-label">🎁 奖励卡</span><span class="stat-value" id="rewardCount1">0 张</span></div>
+    <div class="stat-row"><span class="stat-label">🛍️ 已购</span><span class="stat-value" id="itemCount1">0 件</span></div>
+    <div class="section-label">🛍️ 物品</div><div class="items-list" id="items1"><span style="font-size:11px;color:#ccc;">暂无</span></div>
+    <div class="section-label">🎁 奖励</div><div class="rewards-list" id="rewards1"><span style="font-size:11px;color:#ccc;">暂无</span></div>
+  </div>
+  <div class="log-panel">
+    <div class="log-title">📜 游戏记录</div>
+    <div class="log-content" id="logContent"></div>
+  </div>
+</div>
+</div>
+
+<!-- ===== EVENT MODAL ===== -->
+<div class="event-overlay" id="eventOverlay">
+<div class="event-card" id="eventCard">
+  <div class="event-icon" id="eventIcon">🎁</div>
+  <div class="event-type" id="eventType">--</div>
+  <div class="event-title" id="eventTitle">--</div>
+  <div class="event-desc" id="eventDesc">--</div>
+  <div class="event-cost" id="eventCost"></div>
+  <div class="event-actions" id="eventActions"></div>
+</div>
+</div>
+
+<!-- PeerJS CDN -->
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<script>
+// ===== GAME DATA =====
+const TOTAL=28;
+const spaces=[
+  {id:0,name:'起点',type:'start',icon:'🎉',desc:'经过或到达获得1元零花钱',cost:0},
+  {id:1,name:'三亚',type:'travel',icon:'🏖️',desc:'阳光、沙滩、椰子树！',cost:5000},
+  {id:2,name:'奖励',type:'reward',icon:'🎁',desc:'抽取甜蜜奖励卡',cost:0},
+  {id:3,name:'零食',type:'shop',icon:'🍫',desc:'薯片+可乐+爆米花',cost:30},
+  {id:4,name:'惩罚',type:'punish',icon:'😱',desc:'抽取调皮惩罚卡',cost:0},
+  {id:5,name:'成都',type:'travel',icon:'🐼',desc:'火锅、熊猫、宽窄巷子',cost:6000},
+  {id:6,name:'猫咪',type:'shop',icon:'🐱',desc:'领养一只超萌小猫咪',cost:2000},
+  {id:7,name:'日用品',type:'shop',icon:'🧴',desc:'洗发水、沐浴露、牙膏',cost:50},
+  {id:8,name:'奖励',type:'reward',icon:'🎁',desc:'抽取甜蜜奖励卡',cost:0},
+  {id:9,name:'电动车',type:'shop',icon:'🛵',desc:'可爱小电动车，一起兜风',cost:20000},
+  {id:10,name:'惩罚',type:'punish',icon:'😱',desc:'抽取调皮惩罚卡',cost:0},
+  {id:11,name:'云南',type:'travel',icon:'🌸',desc:'苍山洱海，风花雪月',cost:7000},
+  {id:12,name:'小公寓',type:'shop',icon:'🏠',desc:'温馨的小公寓',cost:50000},
+  {id:13,name:'奖励',type:'reward',icon:'🎁',desc:'抽取甜蜜奖励卡',cost:0},
+  {id:14,name:'连衣裙',type:'shop',icon:'👗',desc:'漂亮的连衣裙',cost:800},
+  {id:15,name:'惩罚',type:'punish',icon:'😱',desc:'抽取调皮惩罚卡',cost:0},
+  {id:16,name:'厦门',type:'travel',icon:'🌊',desc:'鼓浪屿、海景、沙茶面',cost:5500},
+  {id:17,name:'新手机',type:'shop',icon:'📱',desc:'最新款智能手机',cost:5000},
+  {id:18,name:'奖励',type:'reward',icon:'🎁',desc:'抽取甜蜜奖励卡',cost:0},
+  {id:19,name:'小狗',type:'shop',icon:'🐶',desc:'一只忠诚可爱的小狗狗',cost:3000},
+  {id:20,name:'惩罚',type:'punish',icon:'😱',desc:'抽取调皮惩罚卡',cost:0},
+  {id:21,name:'北京',type:'travel',icon:'🏯',desc:'故宫、长城、烤鸭',cost:8000},
+  {id:22,name:'沙发',type:'shop',icon:'🛋️',desc:'超舒适的懒人沙发',cost:4000},
+  {id:23,name:'奖励',type:'reward',icon:'🎁',desc:'抽取甜蜜奖励卡',cost:0},
+  {id:24,name:'上海',type:'travel',icon:'🌃',desc:'外滩夜景，东方明珠',cost:9000},
+  {id:25,name:'电视',type:'shop',icon:'📺',desc:'大屏智能电视',cost:3000},
+  {id:26,name:'惩罚',type:'punish',icon:'😱',desc:'抽取调皮惩罚卡',cost:0},
+  {id:27,name:'奖励',type:'reward',icon:'🎁',desc:'抽取甜蜜奖励卡',cost:0},
+];
+const rewardPool=[
+  {text:'💕 下次见面可以获得一个拥抱',money:0,type:'coupon'},
+  {text:'🤝 获得牵手5分钟',money:0,type:'coupon'},
+  {text:'💰 获得1块钱零花钱',money:1,type:'money'},
+  {text:'😊 可以摸一下脸',money:0,type:'coupon'},
+  {text:'😘 下次见面亲一下脸颊',money:0,type:'coupon'},
+  {text:'🎵 给对方唱一首情歌',money:0,type:'action'},
+  {text:'💸 获得2块钱零花钱',money:2,type:'money'},
+  {text:'🫂 获得一个超长拥抱30秒',money:0,type:'coupon'},
+  {text:'📝 对方可以许一个小愿望',money:0,type:'coupon'},
+  {text:'📷 一起拍一张搞怪合照',money:0,type:'action'},
+];
+const punishPool=[
+  {text:'💸 被罚款2元',money:-2,type:'money'},
+  {text:'🪙 被罚款0.5元',money:-0.5,type:'money'},
+  {text:'💪 做5个俯卧撑',money:0,type:'action'},
+  {text:'📸 做鬼脸并拍照留念',money:0,type:'action'},
+  {text:'🤦 说自己的一件丑事',money:0,type:'action'},
+  {text:'🐕 学小狗叫10秒',money:0,type:'action'},
+  {text:'💃 跳一段搞笑舞蹈',money:0,type:'action'},
+  {text:'💸 被罚款1元',money:-1,type:'money'},
+  {text:'🎭 模仿对方说话30秒',money:0,type:'action'},
+  {text:'💌 大声说三句情话',money:0,type:'action'},
+];
+const dicePatterns={1:[5],2:[3,7],3:[3,5,7],4:[1,3,7,9],5:[1,3,5,7,9],6:[1,3,4,6,7,9]};
+const gridPos=[
+  [8,1],[8,2],[8,3],[8,4],[8,5],[8,6],[8,7],[8,8],
+  [7,8],[6,8],[5,8],[4,8],[3,8],[2,8],
+  [1,8],[1,7],[1,6],[1,5],[1,4],[1,3],[1,2],[1,1],
+  [2,1],[3,1],[4,1],[5,1],[6,1],[7,1],
+];
+
+// ===== STATE =====
+let players=[
+  {name:'玩家1',money:5,voucher:200000,pos:0,items:[],rewards:[]},
+  {name:'玩家2',money:5,voucher:200000,pos:0,items:[],rewards:[]},
+];
+let currentPlayer=0;
+let isMoving=false;
+let isRolling=false;
+let spaceOwners={};
+let myIndex=-1;
+let conn=null;
+let peer=null;
+let roomCode='';
+let gameStarted=false;
+
+// ===== PEERJS =====
+function genCode(){
+  const c='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let s='';for(let i=0;i<4;i++)s+=c[Math.floor(Math.random()*c.length)];
+  return s;
+}
+
+function send(data){
+  if(conn&&conn.open){try{conn.send(data);}catch(e){console.error('send err',e);}}
+}
+
+function createRoom(){
+  const name=document.getElementById('myName').value.trim()||'玩家1';
+  roomCode=genCode();
+  myIndex=0;
+  players[0].name=name;
+  document.getElementById('lobbyMain').style.display='none';
+  document.getElementById('createBox').classList.add('show');
+  document.getElementById('roomCodeDisplay').textContent=roomCode;
+  document.getElementById('lobbyStatus').textContent='正在创建房间...';
+
+  const peerId='couple-monopoly-'+roomCode;
+  peer=new Peer(peerId,{debug:0});
+  peer.on('open',()=>{
+    document.getElementById('lobbyStatus').textContent='房间已创建，等待对方加入...';
+  });
+  peer.on('connection',(c)=>{
+    conn=c;
+    setupConn();
+  });
+  peer.on('error',(err)=>{
+    console.error('Peer error:',err);
+    if(err.type==='unavailable-id'){
+      document.getElementById('lobbyStatus').textContent='房间号冲突，请重试';
+      setTimeout(()=>location.reload(),2000);
+    }else{
+      document.getElementById('lobbyStatus').textContent='连接出错: '+err.type;
+    }
+  });
+}
+
+function showJoinBox(){
+  document.getElementById('lobbyMain').style.display='none';
+  document.getElementById('joinBox').classList.add('show');
+}
+
+function joinRoom(){
+  const code=document.getElementById('joinCodeInput').value.trim().toUpperCase();
+  if(code.length!==4){document.getElementById('lobbyStatus').textContent='请输入4位房间号';document.getElementById('lobbyMain').style.display='block';document.getElementById('joinBox').classList.remove('show');return;}
+  const name=document.getElementById('myName').value.trim()||'玩家2';
+  roomCode=code;
+  myIndex=1;
+  players[1].name=name;
+  document.getElementById('lobbyStatus').textContent='正在连接...';
+  document.getElementById('lobbyMain').style.display='none';
+
+  peer=new Peer({debug:0});
+  peer.on('open',()=>{
+    const hostId='couple-monopoly-'+code;
+    conn=peer.connect(hostId,{reliable:true});
+    setupConn();
+  });
+  peer.on('error',(err)=>{
+    console.error('Peer error:',err);
+    document.getElementById('lobbyStatus').textContent='连接失败，请检查房间号';
+    document.getElementById('lobbyMain').style.display='block';
+    document.getElementById('joinBox').classList.remove('show');
+  });
+}
+
+function setupConn(){
+  conn.on('open',()=>{
+    document.getElementById('lobbyStatus').textContent='已连接！正在进入游戏...';
+    send({t:'hello',name:players[myIndex].name});
+  });
+  conn.on('data',onMsg);
+  conn.on('close',()=>{
+    document.getElementById('connStatus').textContent='连接断开';
+    document.getElementById('connStatus').classList.add('disconnected');
+    addLog(0,'⚠️ 对方已断开连接');
+  });
+}
+
+function onMsg(data){
+  if(!data||!data.t)return;
+  switch(data.t){
+    case 'hello':
+      // The other player said hello
+      if(myIndex===0){
+        players[1].name=data.name;
+        send({t:'start',p0:players[0].name,p1:players[1].name});
+        startGameUI();
+      }
+      break;
+    case 'start':
+      players[0].name=data.p0;
+      players[1].name=data.p1;
+      startGameUI();
+      break;
+    case 'roll':
+      onRemoteRoll(data);
+      break;
+    case 'draw':
+      onRemoteDraw(data);
+      break;
+    case 'land-start':
+      onRemoteLandStart(data);
+      break;
+    case 'land-own':
+      onRemoteLandOwn(data);
+      break;
+    case 'land-rent':
+      onRemoteRent(data);
+      break;
+    case 'buy':
+      onRemoteBuy(data);
+      break;
+    case 'skip':
+      onRemoteSkip(data);
+      break;
+    case 'turn':
+      onRemoteTurn(data);
+      break;
+  }
+}
+
+// ===== START GAME =====
+function startGameUI(){
+  if(gameStarted)return;
+  gameStarted=true;
+  document.getElementById('lobbyScreen').style.display='none';
+  document.getElementById('gameScreen').style.display='flex';
+  buildBoard();
+  initPanels();
+  updateAllUI();
+  updateTurnUI();
+  positionTokens();
+  addLog(0,'🎉 游戏开始！'+players[0].name+' 和 '+players[1].name+' 出发啦~');
+  addLog(0,'💡 房间号: '+roomCode);
+}
+
+function initPanels(){
+  for(let i=0;i<2;i++){
+    document.getElementById('avatar'+i).textContent=players[i].name[0];
+    document.getElementById('panelName'+i).textContent=players[i].name;
+    document.getElementById('token'+i).textContent=players[i].name[0];
+  }
+}
+
+// ===== DICE =====
+function setDiceFace(n){
+  document.querySelectorAll('#dice .dot').forEach(d=>d.classList.remove('show'));
+  (dicePatterns[n]||[]).forEach(p=>{const d=document.querySelector('#dice .dot[data-pos="'+p+'"]');if(d)d.classList.add('show');});
+}
+
+function rollDice(){
+  if(isMoving||isRolling)return;
+  if(currentPlayer!==myIndex)return;
+  isRolling=true;
+  document.getElementById('rollBtn').disabled=true;
+  const dice=document.getElementById('dice');
+  dice.classList.add('rolling');
+  let cnt=0;const max=15;
+  const finalVal=Math.floor(Math.random()*6)+1;
+  const iv=setInterval(()=>{
+    setDiceFace(Math.floor(Math.random()*6)+1);
+    if(++cnt>=max){
+      clearInterval(iv);
+      setDiceFace(finalVal);
+      dice.classList.remove('rolling');
+      isRolling=false;
+      addLog(myIndex,'掷出了 '+finalVal+' 点！🎲');
+      send({t:'roll',p:myIndex,v:finalVal});
+      doMove(myIndex,finalVal,()=>handleLanding(myIndex));
+    }
+  },80);
+}
+
+function onRemoteRoll(data){
+  setDiceFace(data.v);
+  addLog(data.p,players[data.p].name+' 掷出了 '+data.v+' 点！🎲');
+  doMove(data.p,data.v,()=>{/* wait for next msg */});
+}
+
+// ===== MOVEMENT =====
+function doMove(pIdx,steps,cb){
+  isMoving=true;
+  const from=players[pIdx].pos;
+  const totalSteps=steps;
+  let moved=0;
+  function step(){
+    players[pIdx].pos=(players[pIdx].pos+1)%TOTAL;
+    moved++;
+    if(players[pIdx].pos===0&&moved<totalSteps){
+      players[pIdx].money+=1;
+      addLog(pIdx,'经过起点，获得1元！💰');
+      updatePlayerUI(pIdx);
+    }
+    positionToken(pIdx);
+    const tk=document.getElementById('token'+pIdx);
+    tk.classList.add('active');
+    setTimeout(()=>tk.classList.remove('active'),250);
+    if(moved>=totalSteps){
+      isMoving=false;
+      setTimeout(cb,300);
+    }else{
+      setTimeout(step,320);
+    }
+  }
+  step();
+}
+
+// ===== LANDING (local only) =====
+function handleLanding(pIdx){
+  if(pIdx!==myIndex)return;
+  const sp=spaces[players[pIdx].pos];
+  if(sp.type==='start'){
+    players[pIdx].money+=1;
+    addLog(pIdx,'到达起点，获得1元！💰');
+    send({t:'land-start',p:pIdx});
+    showEvent({type:'起点',icon:'🎉',title:'到达起点！',desc:'获得1元零花钱~',cardClass:'start-card',
+      actions:[{text:'好的！',cls:'primary',fn:()=>{closeEvent();updatePlayerUI(pIdx);sendTurn();}}]});
+    updatePlayerUI(pIdx);
+  }
+  else if(sp.type==='reward'){
+    const r=rewardPool[Math.floor(Math.random()*rewardPool.length)];
+    players[pIdx].rewards.push(r);
+    if(r.money>0)players[pIdx].money+=r.money;
+    addLog(pIdx,'获得奖励：'+r.text);
+    send({t:'draw',p:pIdx,ct:'reward',card:r});
+    spawnConfetti();
+    showEvent({type:'奖励卡',icon:'🎁',title:'甜蜜奖励！',desc:r.text,cost:r.money>0?'+'+r.money+'元':'',cardClass:'reward-card',
+      actions:[{text:'收下奖励 💕',cls:'reward-btn',fn:()=>{closeEvent();updatePlayerUI(pIdx);sendTurn();}}]});
+  }
+  else if(sp.type==='punish'){
+    const pu=punishPool[Math.floor(Math.random()*punishPool.length)];
+    players[pIdx].money=Math.max(0,players[pIdx].money+pu.money);
+    addLog(pIdx,'受到惩罚：'+pu.text);
+    send({t:'draw',p:pIdx,ct:'punish',card:pu});
+    showEvent({type:'惩罚卡',icon:'😱',title:'调皮惩罚！',desc:pu.text,cost:pu.money<0?pu.money+'元':'',cardClass:'punish-card',
+      actions:[{text:'接受惩罚 😤',cls:'punish-btn',fn:()=>{closeEvent();updatePlayerUI(pIdx);sendTurn();}}]});
+  }
+  else if(sp.type==='travel'||sp.type==='shop'){
+    const ownerIdx=spaceOwners[sp.id];
+    if(ownerIdx===pIdx){
+      addLog(pIdx,'回到了自己的【'+sp.name+'】');
+      send({t:'land-own',p:pIdx,sid:sp.id});
+      showEvent({type:sp.type==='travel'?'旅游地':'商品',icon:sp.icon,title:'欢迎回家！',desc:'这是你的【'+sp.name+'】',cardClass:'start-card',
+        actions:[{text:'休息一下 😊',cls:'primary',fn:()=>{closeEvent();sendTurn();}}]});
+    }else if(ownerIdx!==undefined){
+      const rent=Math.max(1,Math.floor(sp.cost*0.1));
+      players[pIdx].money=Math.max(0,players[pIdx].money-rent);
+      players[ownerIdx].money+=rent;
+      addLog(pIdx,'踩到'+players[ownerIdx].name+'的【'+sp.name+'】，支付'+rent+'元过路费！');
+      send({t:'land-rent',p:pIdx,sid:sp.id,o:ownerIdx,r:rent});
+      showEvent({type:'过路费',icon:'💸',title:'过路费！',desc:players[ownerIdx].name+'的地盘！\n支付 '+rent+' 元',cost:'-'+rent+'元',cardClass:'punish-card',
+        actions:[{text:'付钱 😢',cls:'punish-btn',fn:()=>{closeEvent();updateAllUI();sendTurn();}}]});
+    }else{
+      const acts=[];
+      if(players[pIdx].voucher>=sp.cost){
+        acts.push({text:'🎫 代金券购买 ('+fmtN(sp.cost)+')',cls:'primary',fn:()=>{
+          players[pIdx].voucher-=sp.cost;spaceOwners[sp.id]=pIdx;
+          players[pIdx].items.push(sp.icon+' '+sp.name);
+          addLog(pIdx,'购买了【'+sp.name+'】，花费'+fmtN(sp.cost)+'券');
+          send({t:'buy',p:pIdx,sid:sp.id,m:'voucher',c:sp.cost});
+          closeEvent();updatePlayerUI(pIdx);markOwned(sp.id,pIdx);sendTurn();
+        }});
+      }
+      if(players[pIdx].rewards.length>0){
+        acts.push({text:'🎁 用奖励兑换',cls:'reward-btn',fn:()=>{
+          const used=players[pIdx].rewards.shift();
+          spaceOwners[sp.id]=pIdx;
+          players[pIdx].items.push(sp.icon+' '+sp.name);
+          addLog(pIdx,'用奖励兑换了【'+sp.name+'】');
+          send({t:'buy',p:pIdx,sid:sp.id,m:'reward',rt:used.text});
+          closeEvent();updatePlayerUI(pIdx);markOwned(sp.id,pIdx);sendTurn();
+        }});
+      }
+      acts.push({text:'路过 👋',cls:'skip-btn',fn:()=>{
+        addLog(pIdx,'路过了【'+sp.name+'】');
+        send({t:'skip',p:pIdx,sid:sp.id});
+        closeEvent();sendTurn();
+      }});
+      showEvent({type:sp.type==='travel'?'旅游目的地':'商品',icon:sp.icon,title:sp.name,desc:sp.desc,cost:fmtN(sp.cost)+' 代金券',
+        cardClass:sp.type==='travel'?'travel-card':'shop-card',actions:acts});
+    }
+  }
+}
+
+// ===== REMOTE EVENT HANDLERS =====
+function onRemoteDraw(d){
+  if(d.ct==='reward'){
+    players[d.p].rewards.push(d.card);
+    if(d.card.money>0)players[d.p].money+=d.card.money;
+    addLog(d.p,players[d.p].name+' 获得奖励：'+d.card.text);
+    if(d.card.money>0)spawnConfetti();
+    showEvent({type:'奖励卡',icon:'🎁',title:players[d.p].name+' 获得奖励',desc:d.card.text,cost:d.card.money>0?'+'+d.card.money+'元':'',cardClass:'reward-card',
+      actions:[{text:'知道了',cls:'skip-btn',fn:closeEvent}]});
+  }else{
+    players[d.p].money=Math.max(0,players[d.p].money+d.card.money);
+    addLog(d.p,players[d.p].name+' 受到惩罚：'+d.card.text);
+    showEvent({type:'惩罚卡',icon:'😱',title:players[d.p].name+' 被惩罚',desc:d.card.text,cost:d.card.money<0?d.card.money+'元':'',cardClass:'punish-card',
+      actions:[{text:'知道了',cls:'skip-btn',fn:closeEvent}]});
+  }
+  updatePlayerUI(d.p);
+}
+
+function onRemoteLandStart(d){
+  players[d.p].money+=1;
+  addLog(d.p,players[d.p].name+' 到达起点，获得1元');
+  showEvent({type:'起点',icon:'🎉',title:players[d.p].name+' 到达起点',desc:'获得1元零花钱',cardClass:'start-card',
+    actions:[{text:'知道了',cls:'skip-btn',fn:closeEvent}]});
+  updatePlayerUI(d.p);
+}
+
+function onRemoteLandOwn(d){
+  const sp=spaces[d.sid];
+  addLog(d.p,players[d.p].name+' 回到了自己的【'+sp.name+'】');
+  showEvent({type:'消息',icon:sp.icon,title:players[d.p].name+' 回家了',desc:'回到了自己的【'+sp.name+'】',cardClass:'info-card',
+    actions:[{text:'知道了',cls:'skip-btn',fn:closeEvent}]});
+}
+
+function onRemoteRent(d){
+  const sp=spaces[d.sid];
+  players[d.p].money=Math.max(0,players[d.p].money-d.r);
+  players[d.o].money+=d.r;
+  addLog(d.p,players[d.p].name+' 踩到'+players[d.o].name+'的【'+sp.name+'】，支付'+d.r+'元');
+  showEvent({type:'过路费',icon:'💸',title:players[d.p].name+' 付过路费',desc:'踩到 '+players[d.o].name+' 的【'+sp.name+'】\n支付 '+d.r+' 元',cost:'-'+d.r+'元',cardClass:'punish-card',
+    actions:[{text:'知道了',cls:'skip-btn',fn:closeEvent}]});
+  updateAllUI();
+}
+
+function onRemoteBuy(d){
+  const sp=spaces[d.sid];
+  if(d.m==='voucher'){
+    players[d.p].voucher-=d.c;
+  }else{
+    // buyer always used rewards.shift(), so remove first reward here too
+    if(players[d.p].rewards.length>0)players[d.p].rewards.shift();
+  }
+  spaceOwners[d.sid]=d.p;
+  if(!players[d.p].items.find(it=>it.includes(sp.name))){
+    players[d.p].items.push(sp.icon+' '+sp.name);
+  }
+  markOwned(d.sid,d.p);
+  addLog(d.p,players[d.p].name+' 购买了【'+sp.name+'】'+(d.m==='voucher'?' (代金券)':' (奖励兑换)'));
+  showEvent({type:'购买',icon:sp.icon,title:players[d.p].name+' 购买了'+sp.name,desc:sp.desc,cost:d.m==='voucher'?fmtN(d.c)+' 代金券':'使用奖励兑换',cardClass:'shop-card',
+    actions:[{text:'知道了',cls:'skip-btn',fn:closeEvent}]});
+  updatePlayerUI(d.p);
+}
+
+function onRemoteSkip(d){
+  const sp=spaces[d.sid];
+  addLog(d.p,players[d.p].name+' 路过了【'+sp.name+'】');
+}
+
+function onRemoteTurn(d){
+  currentPlayer=d.next;
+  updateTurnUI();
+}
+
+function sendTurn(){
+  const next=1-currentPlayer;
+  currentPlayer=next;
+  send({t:'turn',next:next});
+  updateTurnUI();
+}
+
+// ===== TURN UI =====
+function updateTurnUI(){
+  const el=document.getElementById('turnIndicator');
+  const p=players[currentPlayer];
+  el.textContent=p.name+' 的回合';
+  el.className='turn-indicator '+(currentPlayer===0?'p1-turn':'p2-turn');
+  const isMyTurn=currentPlayer===myIndex;
+  document.getElementById('rollBtn').disabled=!isMyTurn;
+  document.getElementById('rollBtn').style.display=isMyTurn?'inline-block':'none';
+  document.getElementById('waitingText').style.display=isMyTurn?'none':'block';
+  document.getElementById('panel0').classList.toggle('active-panel',currentPlayer===0);
+  document.getElementById('panel1').classList.toggle('active-panel',currentPlayer===1);
+}
+
+// ===== BOARD =====
+function buildBoard(){
+  const board=document.getElementById('board');
+  spaces.forEach((sp,i)=>{
+    const d=document.createElement('div');
+    d.className='space space-'+sp.type;
+    d.id='space-'+i;
+    d.style.gridRow=gridPos[i][0];
+    d.style.gridColumn=gridPos[i][1];
+    d.innerHTML='<div class="s-icon">'+sp.icon+'</div><div class="s-name">'+sp.name+'</div>'+
+      (sp.cost>0?'<div class="s-cost">'+fmtN(sp.cost)+'券</div>':'');
+    board.appendChild(d);
+  });
+}
+
+function positionTokens(){positionToken(0);positionToken(1);}
+function positionToken(pIdx){
+  const tk=document.getElementById('token'+pIdx);
+  const sp=document.getElementById('space-'+players[pIdx].pos);
+  const bw=document.querySelector('.board-wrapper');
+  if(!tk||!sp||!bw)return;
+  const br=bw.getBoundingClientRect();
+  const sr=sp.getBoundingClientRect();
+  const ox=pIdx===0?-7:7;const oy=pIdx===0?-7:7;
+  tk.style.left=(sr.left-br.left+sr.width/2-14+ox)+'px';
+  tk.style.top=(sr.top-br.top+sr.height/2-14+oy)+'px';
+}
+function markOwned(sid,pIdx){
+  const el=document.getElementById('space-'+sid);
+  if(!el)return;
+  const old=el.querySelector('.owner-tag');if(old)old.remove();
+  const tag=document.createElement('div');tag.className='owner-tag';
+  tag.style.background=pIdx===0?'#FF6B6B':'#4ECDC4';
+  tag.textContent=players[pIdx].name[0];el.appendChild(tag);
+}
+
+// ===== EVENT MODAL =====
+function showEvent(o){
+  const card=document.getElementById('eventCard');
+  card.className='event-card '+(o.cardClass||'');
+  document.getElementById('eventIcon').textContent=o.icon;
+  document.getElementById('eventType').textContent=o.type;
+  document.getElementById('eventTitle').textContent=o.title;
+  document.getElementById('eventDesc').textContent=o.desc;
+  document.getElementById('eventCost').textContent=o.cost||'';
+  const ad=document.getElementById('eventActions');ad.innerHTML='';
+  (o.actions||[]).forEach(a=>{
+    const b=document.createElement('button');
+    b.className='event-btn '+a.cls;b.textContent=a.text;
+    b.onclick=a.fn;ad.appendChild(b);
+  });
+  document.getElementById('eventOverlay').classList.add('show');
+}
+function closeEvent(){document.getElementById('eventOverlay').classList.remove('show');}
+
+// ===== UI UPDATE =====
+function updateAllUI(){updatePlayerUI(0);updatePlayerUI(1);}
+function updatePlayerUI(i){
+  const p=players[i];
+  document.getElementById('money'+i).textContent=p.money.toFixed(2)+' 元';
+  document.getElementById('voucher'+i).textContent=fmtN(p.voucher);
+  document.getElementById('rewardCount'+i).textContent=p.rewards.length+' 张';
+  document.getElementById('itemCount'+i).textContent=p.items.length+' 件';
+  const itEl=document.getElementById('items'+i);
+  itEl.innerHTML=p.items.length===0?'<span style="font-size:11px;color:#ccc;">暂无</span>':
+    p.items.map(x=>'<span class="item-tag">'+x+'</span>').join('');
+  const rwEl=document.getElementById('rewards'+i);
+  rwEl.innerHTML=p.rewards.length===0?'<span style="font-size:11px;color:#ccc;">暂无</span>':
+    p.rewards.map((r,j)=>'<div class="reward-item">'+(j+1)+'. '+r.text+'</div>').join('');
+}
+
+// ===== LOG =====
+function addLog(pIdx,text){
+  const el=document.getElementById('logContent');
+  const d=document.createElement('div');
+  d.className='log-entry '+(pIdx===0?'p1-log':'p2-log');
+  const t=new Date().toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit'});
+  d.innerHTML='<span style="color:#bbb;font-size:10px;">['+t+']</span> <span class="lp">'+players[pIdx].name+'</span> '+text;
+  el.prepend(d);
+  while(el.children.length>50)el.removeChild(el.lastChild);
+}
+
+// ===== CONFETTI =====
+function spawnConfetti(){
+  const colors=['#FF6B6B','#FFD93D','#6C5CE7','#00B894','#FF8E53','#A29BFE','#FD79A8','#FDCB6E'];
+  for(let i=0;i<25;i++){
+    const c=document.createElement('div');c.className='confetti';
+    c.style.left=Math.random()*100+'vw';c.style.top='-10px';
+    c.style.background=colors[Math.floor(Math.random()*colors.length)];
+    c.style.width=(6+Math.random()*8)+'px';c.style.height=(6+Math.random()*8)+'px';
+    c.style.animationDuration=(1+Math.random()*1.5)+'s';
+    c.style.animationDelay=(Math.random()*0.5)+'s';
+    document.body.appendChild(c);setTimeout(()=>c.remove(),3000);
+  }
+}
+
+// ===== UTILS =====
+function fmtN(n){return n.toString().replace(/\B(?=(\d{3})+(?!\d))/g,',');}
+function copyCode(){
+  navigator.clipboard.writeText(roomCode).then(()=>{
+    const el=document.getElementById('roomCodeDisplay');
+    const orig=el.textContent;el.textContent='已复制!';
+    setTimeout(()=>el.textContent=orig,1500);
+  });
+}
+
+setDiceFace(1);
+window.addEventListener('resize',()=>{if(gameStarted)positionTokens();});
+</script>
+</body>
+</html>
